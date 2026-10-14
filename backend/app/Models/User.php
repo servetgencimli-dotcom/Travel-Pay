@@ -107,4 +107,34 @@ class User extends Authenticatable
     {
         return $this->hasMany(FraudAlert::class);
     }
+
+    public function bankAccounts(): HasMany
+    {
+        return $this->hasMany(LinkedBankAccount::class);
+    }
+
+    public function kycVerifications(): HasMany
+    {
+        return $this->hasMany(KycVerification::class);
+    }
+
+    public function latestKyc(): HasOne
+    {
+        return $this->hasOne(KycVerification::class)->latestOfMany();
+    }
+
+    public function virtualCards(): HasMany
+    {
+        return $this->hasMany(VirtualCard::class);
+    }
+
+    public function bookings(): HasMany
+    {
+        return $this->hasMany(TravelBooking::class);
+    }
+
+    public function isKycVerified(): bool
+    {
+        return $this->kycVerifications()->where('status', 'verified')->exists();
+    }
 }

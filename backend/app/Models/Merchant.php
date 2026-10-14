@@ -16,9 +16,28 @@ class Merchant extends Model
         'merchant_name',
         'merchant_code',
         'category',
+        'city',
+        'address',
+        'description',
+        'rating',
+        'cashback_percent',
+        'accepts_crypto',
         'api_key_hash',
         'status',
     ];
+
+    protected $hidden = [
+        'api_key_hash',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'rating' => 'decimal:1',
+            'cashback_percent' => 'decimal:2',
+            'accepts_crypto' => 'boolean',
+        ];
+    }
 
     public function user(): BelongsTo
     {

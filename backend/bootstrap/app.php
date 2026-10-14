@@ -12,7 +12,14 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        //
+        $middleware->alias([
+            'admin' => \App\Http\Middleware\EnsureAdmin::class,
+        ]);
+
+        // Threat Shield (blocklist, DDoS rate shield, WAF) runs before every API request.
+        $middleware->api(prepend: [
+            \App\Http\Middleware\ThreatShield::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

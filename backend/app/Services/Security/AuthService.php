@@ -261,7 +261,7 @@ class AuthService
         );
     }
 
-    protected function verifyTwoFactorCode(User $user, string $code): bool
+    public function verifyTwoFactorCode(User $user, string $code): bool
     {
         if (!$user->two_factor_secret) {
             return false;

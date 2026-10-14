@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
             CurrencySeeder::class,
             ExpenseCategorySeeder::class,
             FraudRuleSeeder::class,
+            CryptoAssetSeeder::class,
         ]);
 
         // 2. Administrator Account
@@ -61,6 +62,12 @@ class DatabaseSeeder extends Seeder
             ]
         );
         $this->ensureUserWallet($user2, ['AZN' => 1800.00, 'EUR' => 500.00, 'USD' => 400.00]);
+
+        // 5. Tourist partner merchants (with static QR codes) and demo activity
+        $this->call([
+            MerchantSeeder::class,
+            DemoActivitySeeder::class,
+        ]);
     }
 
     protected function ensureUserWallet(User $user, array $balances): Wallet

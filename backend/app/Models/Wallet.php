@@ -32,6 +32,11 @@ class Wallet extends Model
         return $this->hasMany(Transaction::class);
     }
 
+    public function cryptoHoldings(): HasMany
+    {
+        return $this->hasMany(CryptoHolding::class);
+    }
+
     public function getBalance(string $currencyCode): ?WalletBalance
     {
         return $this->balances->firstWhere('currency_code', strtoupper($currencyCode));
