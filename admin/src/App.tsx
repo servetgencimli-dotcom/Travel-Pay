@@ -8,8 +8,10 @@ import { DashboardView } from './views/DashboardView';
 import { UsersView } from './views/UsersView';
 import { WalletsView } from './views/WalletsView';
 import { TransactionsView } from './views/TransactionsView';
+import { LedgerView } from './views/LedgerView';
 import { FraudMonitoringView } from './views/FraudMonitoringView';
 import { RiskRulesView } from './views/RiskRulesView';
+import { ThreatShieldView } from './views/ThreatShieldView';
 import { SecurityEventsView } from './views/SecurityEventsView';
 import { TravelAnalyticsView } from './views/TravelAnalyticsView';
 import { AuditLogsView } from './views/AuditLogsView';
@@ -18,6 +20,7 @@ export const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [currentTab, setCurrentTab] = useState<NavTab>('dashboard');
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const checkAuth = useCallback(async () => {
     try {
@@ -80,10 +83,14 @@ export const App: React.FC = () => {
         return <WalletsView />;
       case 'transactions':
         return <TransactionsView />;
+      case 'ledger':
+        return <LedgerView />;
       case 'fraud':
         return <FraudMonitoringView />;
       case 'rules':
         return <RiskRulesView />;
+      case 'threats':
+        return <ThreatShieldView />;
       case 'security':
         return <SecurityEventsView />;
       case 'travel':
@@ -100,23 +107,31 @@ export const App: React.FC = () => {
     users: 'Account Holder Registry & Wallet Permissions',
     wallets: 'Multi-Currency Reserves (AZN, EUR, USD)',
     transactions: 'Cryptographic Ledger & Transaction Audits',
+    ledger: 'Double-Entry General Ledger & Trial Balance Verification',
     fraud: 'Cybersecurity Threat Detection & Alert Surveillance',
     rules: 'Automated Fraud Rules & Action Modifiers',
+    threats: 'Threat Shield & Perimeter Defense (WAF / DDoS)',
     security: 'Platform Security Events & Registered Devices',
     travel: 'Smart Tourism Analytics & Category Spending',
     audit: 'Immutable Audit Trail & Regulatory Compliance',
   };
 
   return (
-    <div className="flex min-h-screen bg-[#050b14] text-slate-200">
+    <div className="flex h-screen bg-[#050b14] text-slate-200 overflow-hidden">
       <Sidebar
         currentTab={currentTab}
         onSelectTab={(tab) => setCurrentTab(tab)}
         onLogout={handleLogout}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
       />
 
-      <div className="flex-1 flex flex-col min-w-0">
-        <Header title={titles[currentTab]} adminName={currentUser.name} />
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+        <Header
+          title={titles[currentTab]}
+          adminName={currentUser.name}
+          onToggleMenu={() => setSidebarOpen((prev) => !prev)}
+        />
         <main className="flex-1 overflow-y-auto custom-scrollbar">
           {renderActiveView()}
         </main>

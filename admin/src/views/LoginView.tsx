@@ -98,12 +98,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
           </button>
         </form>
 
-        <div className="pt-2 border-t border-white/5 text-center">
-          <div className="text-[11px] text-slate-400">
-            Seeded Admin Account: <span className="font-mono text-cyan-400">admin@travelpay.com</span>
-          </div>
-          <div className="text-[11px] text-slate-400 font-mono mt-0.5">
-            Password: <span className="text-slate-200">Password123!</span>
+        <div className="pt-4 border-t border-white/10 text-center space-y-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            Demo Administrator Credentials
+          </p>
+          <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 text-xs font-mono text-slate-300 flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2">
+            <span className="text-cyan-400 font-semibold">admin@travelpay.com</span>
+            <span className="hidden sm:inline text-slate-600">|</span>
+            <span>Password: <strong className="text-slate-100 font-normal">Password123!</strong></span>
           </div>
         </div>
       </div>

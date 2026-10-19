@@ -42,12 +42,12 @@ export const RiskRulesView: React.FC = () => {
   };
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-[1600px] mx-auto w-full">
       <div className="glass-card p-5 rounded-2xl flex items-center justify-between">
         <div>
           <h3 className="text-sm font-bold text-white flex items-center gap-2">
-            <Sliders className="w-4 h-4 text-cyan-400" />
-            Configurable Cybersecurity Rules Engine
+            <Sliders className="w-4 h-4 text-cyan-400 shrink-0" />
+            <span>Configurable Cybersecurity Rules Engine</span>
           </h3>
           <p className="text-xs text-slate-400">Dynamically adjust risk weights, threshold bounds, and automated response actions.</p>
         </div>
@@ -58,9 +58,9 @@ export const RiskRulesView: React.FC = () => {
           <div className="text-center py-8 text-xs text-slate-400">Loading risk rules...</div>
         ) : (
           rules.map((rule) => (
-            <div key={rule.id} className="glass-card p-5 rounded-2xl border border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="space-y-1 max-w-xl">
-                <div className="flex items-center gap-2">
+            <div key={rule.id} className="glass-card p-5 rounded-2xl border border-white/10 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div className="space-y-1 max-w-xl min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono text-xs font-bold text-cyan-400">{rule.rule_code}</span>
                   <span className="text-sm font-bold text-white">{rule.rule_name}</span>
                   <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-purple-500/20 text-purple-300">
@@ -73,7 +73,7 @@ export const RiskRulesView: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3 shrink-0">
                 <div className="space-y-1">
                   <label className="text-[10px] uppercase font-bold text-slate-400 block">Enforcement Action</label>
                   <select

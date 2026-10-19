@@ -29,18 +29,18 @@ export const TravelAnalyticsView: React.FC = () => {
   const { total_trips, trips_by_status, top_destinations, expenses_by_category } = data || {};
 
   return (
-    <div className="p-8 space-y-8">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8 max-w-[1600px] mx-auto w-full">
       <div className="glass-card p-5 rounded-2xl flex items-center justify-between">
         <div>
           <h3 className="text-sm font-bold text-white flex items-center gap-2">
-            <Compass className="w-4 h-4 text-cyan-400" />
-            Smart Tourism & Travel Analytics
+            <Compass className="w-4 h-4 text-cyan-400 shrink-0" />
+            <span>Smart Tourism & Travel Analytics</span>
           </h3>
           <p className="text-xs text-slate-400">Aggregated travel itineraries, top destinations, and categorical tourism spend.</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
         <div className="glass-card p-6 rounded-2xl space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs uppercase tracking-wider text-slate-400 font-bold">Planned & Active Trips</span>

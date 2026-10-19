@@ -23,32 +23,33 @@ export const WalletsView: React.FC = () => {
   }, [loadWallets]);
 
   return (
-    <div className="p-8 space-y-6">
-      <div className="glass-card p-5 rounded-2xl flex items-center justify-between">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-[1600px] mx-auto w-full">
+      <div className="glass-card p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-bold text-white flex items-center gap-2">
-            <Wallet className="w-4 h-4 text-cyan-400" />
-            Wallet Accounts & Reserves Overview
+            <Wallet className="w-4 h-4 text-cyan-400 shrink-0" />
+            <span>Wallet Accounts & Reserves Overview</span>
           </h3>
           <p className="text-xs text-slate-400">Multi-currency digital accounts with double-entry integrity check.</p>
         </div>
-        <button onClick={loadWallets} className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs text-slate-300 border border-white/10 transition cursor-pointer">
+        <button onClick={loadWallets} className="self-start sm:self-auto px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs text-slate-300 border border-white/10 transition cursor-pointer">
           Refresh
         </button>
       </div>
 
       <div className="glass-card rounded-2xl overflow-hidden border border-white/10">
-        <table className="w-full text-left text-xs">
-          <thead>
-            <tr className="border-b border-white/10 text-slate-400 uppercase tracking-wider bg-white/5">
-              <th className="py-3 px-5">Wallet Number</th>
-              <th className="py-3 px-4">Account Owner</th>
-              <th className="py-3 px-4">AZN Total / Available</th>
-              <th className="py-3 px-4">EUR Total / Available</th>
-              <th className="py-3 px-4">USD Total / Available</th>
-              <th className="py-3 px-4">Status</th>
-            </tr>
-          </thead>
+        <div className="overflow-x-auto custom-scrollbar">
+          <table className="w-full text-left text-xs whitespace-nowrap">
+            <thead>
+              <tr className="border-b border-white/10 text-slate-400 uppercase tracking-wider bg-white/5">
+                <th className="py-3 px-5">Wallet Number</th>
+                <th className="py-3 px-4">Account Owner</th>
+                <th className="py-3 px-4">AZN Total / Available</th>
+                <th className="py-3 px-4">EUR Total / Available</th>
+                <th className="py-3 px-4">USD Total / Available</th>
+                <th className="py-3 px-4">Status</th>
+              </tr>
+            </thead>
           <tbody className="divide-y divide-white/5 font-mono">
             {loading ? (
               <tr>
@@ -88,6 +89,7 @@ export const WalletsView: React.FC = () => {
             })}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

@@ -122,6 +122,46 @@ export class ApiClient {
     return this.request('/admin/travel-analytics');
   }
 
+  public static approveTransaction(transactionId: number) {
+    return this.request(`/admin/transactions/${transactionId}/approve`, {
+      method: 'POST',
+    });
+  }
+
+  public static rejectTransaction(transactionId: number) {
+    return this.request(`/admin/transactions/${transactionId}/reject`, {
+      method: 'POST',
+    });
+  }
+
+  public static getLedger(limit = 40) {
+    return this.request(`/admin/ledger?limit=${limit}`);
+  }
+
+  public static getThreats() {
+    return this.request('/admin/threats');
+  }
+
+  public static blockIp(ip_address: string, reason: string, minutes?: number) {
+    return this.request('/admin/blocked-ips', {
+      method: 'POST',
+      body: JSON.stringify({ ip_address, reason, minutes }),
+    });
+  }
+
+  public static unblockIp(id: number) {
+    return this.request(`/admin/blocked-ips/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  public static simulateSandbox(scenario: string, count = 100) {
+    return this.request('/admin/sandbox/simulate', {
+      method: 'POST',
+      body: JSON.stringify({ scenario, count }),
+    });
+  }
+
   public static getAuditLogs(action = '', page = 1) {
     const params = new URLSearchParams({ action, page: String(page) });
     return this.request(`/admin/audit-logs?${params}`);

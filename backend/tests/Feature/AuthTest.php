@@ -262,4 +262,32 @@ class AuthTest extends TestCase
 
         $this->assertDatabaseMissing('user_devices', ['id' => $device->id]);
     }
+
+    public function test_user_requires_password_to_disable_two_factor(): void
+    {
+        $user = User::factory()->create([
+            'password' => bcrypt('Secret123!'),
+            'two_factor_enabled' => true,
+        ]);
+
+        // Missing password fails validation
+        $failResponse = $this->actingAs($user, 'sanctum')
+            ->postJson('/api/v1/auth/2fa/disable', []);
+        $failResponse->assertStatus(422)
+            ->assertJsonValidationErrors(['password']);
+
+        // Wrong password fails
+        $wrongResponse = $this->actingAs($user, 'sanctum')
+            ->postJson('/api/v1/auth/2fa/disable', ['password' => 'WrongPass999!']);
+        $wrongResponse->assertStatus(422)
+            ->assertJson(['status' => 'error']);
+        $this->assertTrue($user->fresh()->two_factor_enabled);
+
+        // Correct password disables 2FA
+        $okResponse = $this->actingAs($user, 'sanctum')
+            ->postJson('/api/v1/auth/2fa/disable', ['password' => 'Secret123!']);
+        $okResponse->assertStatus(200)
+            ->assertJson(['status' => 'success']);
+        $this->assertFalse($user->fresh()->two_factor_enabled);
+    }
 }

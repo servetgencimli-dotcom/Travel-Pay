@@ -9,6 +9,7 @@ use App\Http\Resources\UserResource;
 use App\Services\Security\AuthService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 
 class AuthController extends Controller
 {
@@ -110,6 +111,17 @@ class AuthController extends Controller
 
     public function disableTwoFactor(Request $request): JsonResponse
     {
+        $request->validate([
+            'password' => ['required', 'string'],
+        ]);
+
+        if (!Hash::check($request->input('password'), $request->user()->password)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'The provided password does not match your current password.',
+            ], 422);
+        }
+
         $this->authService->disableTwoFactor($request->user());
 
         return response()->json([
