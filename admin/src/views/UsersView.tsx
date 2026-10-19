@@ -10,10 +10,6 @@ export const UsersView: React.FC = () => {
   const [role, setRole] = useState('');
   const [status, setStatus] = useState('');
 
-  useEffect(() => {
-    loadUsers();
-  }, [role, status]);
-
   const loadUsers = async () => {
     try {
       setLoading(true);
@@ -25,6 +21,11 @@ export const UsersView: React.FC = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- search runs on submit
+  }, [role, status]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();

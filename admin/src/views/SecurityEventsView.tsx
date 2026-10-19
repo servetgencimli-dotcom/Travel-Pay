@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ApiClient } from '../services/api';
 import { ShieldCheck, Laptop, Smartphone } from 'lucide-react';
 
@@ -6,11 +6,7 @@ export const SecurityEventsView: React.FC = () => {
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadEvents();
-  }, []);
-
-  const loadEvents = async () => {
+  const loadEvents = useCallback(async () => {
     try {
       setLoading(true);
       const res = await ApiClient.getSecurityEvents();
@@ -20,7 +16,11 @@ export const SecurityEventsView: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadEvents();
+  }, [loadEvents]);
 
   return (
     <div className="p-8 space-y-6">

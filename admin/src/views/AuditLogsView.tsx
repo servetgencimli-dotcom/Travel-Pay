@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ApiClient } from '../services/api';
 import { FileText, Search } from 'lucide-react';
 
@@ -7,11 +7,7 @@ export const AuditLogsView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [action, setAction] = useState('');
 
-  useEffect(() => {
-    loadLogs();
-  }, [action]);
-
-  const loadLogs = async () => {
+  const loadLogs = useCallback(async () => {
     try {
       setLoading(true);
       const res = await ApiClient.getAuditLogs(action);
@@ -21,7 +17,11 @@ export const AuditLogsView: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [action]);
+
+  useEffect(() => {
+    loadLogs();
+  }, [loadLogs]);
 
   return (
     <div className="p-8 space-y-6">

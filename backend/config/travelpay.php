@@ -44,5 +44,7 @@ return [
         // Requests per IP per minute before the DDoS shield auto-blocks the address.
         'ddos_requests_per_minute' => (int) env('TRAVELPAY_DDOS_RPM', 300),
         'ddos_block_minutes' => (int) env('TRAVELPAY_DDOS_BLOCK_MINUTES', 15),
+        // Sandbox OTP "123456" accepted as a 2FA code. Never enable this in production.
+        'demo_otp_enabled' => (bool) env('TRAVELPAY_DEMO_OTP', in_array(env('APP_ENV', 'production'), ['local', 'testing'], true)),
     ],
 ];

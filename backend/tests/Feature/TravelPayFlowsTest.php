@@ -100,6 +100,35 @@ class TravelPayFlowsTest extends TestCase
         $this->assertEquals($before - 6000, $this->balance($admin, 'AZN'));
         $this->assertEquals($ayselBefore + 6000, $this->balance($aysel, 'AZN'));
         $this->assertSame('completed', $tx->fresh()->status);
+
+        // A second approval must not settle the money again.
+        $this->postJson("/api/v1/admin/transactions/{$tx->id}/approve")->assertStatus(422);
+        $this->assertEquals($ayselBefore + 6000, $this->balance($aysel, 'AZN'));
+    }
+
+    public function test_admin_cannot_change_own_status_and_suspension_revokes_tokens(): void
+    {
+        $admin = User::where('email', 'admin@travelpay.com')->first();
+        $aysel = $this->aysel();
+        $aysel->createToken('phone');
+
+        Sanctum::actingAs($admin);
+        $this->patchJson("/api/v1/admin/users/{$admin->id}/status", ['status' => 'suspended'])->assertStatus(422);
+        $this->assertSame('active', $admin->fresh()->status);
+
+        $this->patchJson("/api/v1/admin/users/{$aysel->id}/status", ['status' => 'suspended'])->assertOk();
+        $this->assertSame(0, $aysel->tokens()->count());
+    }
+
+    public function test_demo_otp_is_rejected_when_disabled(): void
+    {
+        $elvin = $this->elvin();
+        $elvin->update(['two_factor_secret' => encrypt('SECRET')]);
+        $auth = app(\App\Services\Security\AuthService::class);
+
+        $this->assertTrue($auth->verifyTwoFactorCode($elvin, '123456'));
+        config(['travelpay.security.demo_otp_enabled' => false]);
+        $this->assertFalse($auth->verifyTwoFactorCode($elvin, '123456'));
     }
 
     public function test_unverified_user_is_limited_and_kyc_unlocks(): void

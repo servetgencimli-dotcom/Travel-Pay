@@ -271,6 +271,12 @@ class WalletService
         $assessment = $this->screen($payer, $wallet, $amount, $currency, 'payment', $description, $request, holdable: true);
 
         return DB::transaction(function () use ($payer, $payee, $wallet, $payeeWallet, $paymentRequest, $merchant, $payeeName, $amount, $currency, $description, $assessment, $request) {
+            // Lock the request so a single-use QR cannot be paid twice by parallel requests.
+            $locked = PaymentRequest::whereKey($paymentRequest->id)->lockForUpdate()->first();
+            if (!$locked || $locked->status !== 'pending') {
+                throw new WalletException('This QR code is no longer valid.', 422, 'qr_inactive');
+            }
+
             $balance = $this->lockBalance($wallet, $currency);
             $this->ensureAvailable($balance, $amount);
 
@@ -430,6 +436,10 @@ class WalletService
 
         return DB::transaction(function () use ($tx, $admin, $request) {
             $tx = Transaction::whereKey($tx->id)->lockForUpdate()->first();
+            // Re-check under the row lock so two concurrent approvals cannot settle twice.
+            if ($tx->status !== 'held_for_review') {
+                throw new WalletException('Transaction was already reviewed.', 409, 'already_reviewed');
+            }
             $balance = $this->lockBalance($tx->wallet, $tx->currency_code);
 
             $balance->update([
@@ -465,6 +475,9 @@ class WalletService
 
         return DB::transaction(function () use ($tx, $admin, $request) {
             $tx = Transaction::whereKey($tx->id)->lockForUpdate()->first();
+            if ($tx->status !== 'held_for_review') {
+                throw new WalletException('Transaction was already reviewed.', 409, 'already_reviewed');
+            }
             $balance = $this->lockBalance($tx->wallet, $tx->currency_code);
 
             $balance->update(['locked_balance' => bcsub((string) $balance->locked_balance, (string) $tx->amount, 4)]);

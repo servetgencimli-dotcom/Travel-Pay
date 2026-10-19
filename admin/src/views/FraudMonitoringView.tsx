@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ApiClient } from '../services/api';
 import { ShieldAlert, CheckCircle } from 'lucide-react';
 
@@ -6,11 +6,7 @@ export const FraudMonitoringView: React.FC = () => {
   const [alerts, setAlerts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadAlerts();
-  }, []);
-
-  const loadAlerts = async () => {
+  const loadAlerts = useCallback(async () => {
     try {
       setLoading(true);
       const res = await ApiClient.getFraudAlerts();
@@ -20,7 +16,11 @@ export const FraudMonitoringView: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadAlerts();
+  }, [loadAlerts]);
 
   const handleUpdateStatus = async (alertId: number, status: string) => {
     try {

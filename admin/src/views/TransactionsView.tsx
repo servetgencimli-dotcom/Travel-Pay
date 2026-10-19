@@ -1,6 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ApiClient } from '../services/api';
 import { ArrowLeftRight } from 'lucide-react';
+
+const STATUS_STYLES: Record<string, string> = {
+  completed: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+  pending: 'bg-slate-500/10 text-slate-300 border-slate-500/20',
+  held_for_review: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  failed: 'bg-red-500/10 text-red-400 border-red-500/20',
+  cancelled: 'bg-red-500/10 text-red-300 border-red-500/20',
+};
 
 export const TransactionsView: React.FC = () => {
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -9,11 +17,7 @@ export const TransactionsView: React.FC = () => {
   const [status, setStatus] = useState('');
   const [currency, setCurrency] = useState('');
 
-  useEffect(() => {
-    loadTransactions();
-  }, [type, status, currency]);
-
-  const loadTransactions = async () => {
+  const loadTransactions = useCallback(async () => {
     try {
       setLoading(true);
       const res = await ApiClient.getTransactions(type, status, currency);
@@ -23,7 +27,11 @@ export const TransactionsView: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [type, status, currency]);
+
+  useEffect(() => {
+    loadTransactions();
+  }, [loadTransactions]);
 
   return (
     <div className="p-8 space-y-6">
@@ -49,6 +57,11 @@ export const TransactionsView: React.FC = () => {
             <option value="top_up" className="bg-navy-900">Top-up</option>
             <option value="exchange" className="bg-navy-900">Exchange</option>
             <option value="payment" className="bg-navy-900">QR Payment</option>
+            <option value="card_payment" className="bg-navy-900">Card Payment</option>
+            <option value="booking" className="bg-navy-900">Booking</option>
+            <option value="refund" className="bg-navy-900">Refund</option>
+            <option value="crypto_buy" className="bg-navy-900">Crypto Buy</option>
+            <option value="crypto_sell" className="bg-navy-900">Crypto Sell</option>
           </select>
 
           <select
@@ -74,6 +87,7 @@ export const TransactionsView: React.FC = () => {
             <option value="pending" className="bg-navy-900">Pending</option>
             <option value="held_for_review" className="bg-navy-900">Held for Review</option>
             <option value="failed" className="bg-navy-900">Failed</option>
+            <option value="cancelled" className="bg-navy-900">Cancelled</option>
           </select>
         </div>
       </div>
@@ -101,7 +115,7 @@ export const TransactionsView: React.FC = () => {
             ) : transactions.length === 0 ? (
               <tr>
                 <td colSpan={8} className="py-8 text-center text-slate-400 font-sans">
-                  No transactions recorded yet. Ready for transfers in Phase 3.
+                  No transactions match these filters.
                 </td>
               </tr>
             ) : transactions.map((t) => (
@@ -121,7 +135,7 @@ export const TransactionsView: React.FC = () => {
                   </span>
                 </td>
                 <td className="py-3.5 px-4 uppercase text-[10px] font-sans">
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  <span className={`px-2 py-0.5 rounded-full border ${STATUS_STYLES[t.status] ?? STATUS_STYLES.pending}`}>
                     {t.status}
                   </span>
                 </td>

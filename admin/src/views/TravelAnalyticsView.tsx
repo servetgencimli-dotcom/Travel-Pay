@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ApiClient } from '../services/api';
 import { Compass, MapPin, PieChart, Plane } from 'lucide-react';
 
@@ -6,11 +6,7 @@ export const TravelAnalyticsView: React.FC = () => {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadAnalytics();
-  }, []);
-
-  const loadAnalytics = async () => {
+  const loadAnalytics = useCallback(async () => {
     try {
       setLoading(true);
       const res = await ApiClient.getTravelAnalytics();
@@ -20,7 +16,11 @@ export const TravelAnalyticsView: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadAnalytics();
+  }, [loadAnalytics]);
 
   if (loading) {
     return <div className="p-8 text-xs text-slate-400">Loading travel analytics...</div>;

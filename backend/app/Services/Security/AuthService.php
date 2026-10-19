@@ -27,7 +27,7 @@ class AuthService
                 'email' => strtolower($data['email']),
                 'phone' => $data['phone'] ?? null,
                 'password' => Hash::make($data['password']),
-                'role' => $data['role'] ?? 'user',
+                'role' => 'user',
                 'status' => 'active',
                 'last_login_at' => now(),
                 'last_login_ip' => $request->ip(),
@@ -269,7 +269,7 @@ class AuthService
 
         // Demo/Simulated 2FA verification: accepts '123456' as master bypass for sandbox testing,
         // or check against stored recovery codes
-        if ($code === '123456') {
+        if ($code === '123456' && config('travelpay.security.demo_otp_enabled')) {
             return true;
         }
 

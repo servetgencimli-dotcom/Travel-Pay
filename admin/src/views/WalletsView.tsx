@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ApiClient } from '../services/api';
 import { Wallet } from 'lucide-react';
 
@@ -6,11 +6,7 @@ export const WalletsView: React.FC = () => {
   const [wallets, setWallets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadWallets();
-  }, []);
-
-  const loadWallets = async () => {
+  const loadWallets = useCallback(async () => {
     try {
       setLoading(true);
       const res = await ApiClient.getWallets();
@@ -20,7 +16,11 @@ export const WalletsView: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadWallets();
+  }, [loadWallets]);
 
   return (
     <div className="p-8 space-y-6">

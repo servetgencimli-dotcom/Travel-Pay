@@ -140,6 +140,12 @@ class BookingService
         }
 
         return DB::transaction(function () use ($user, $booking, $request) {
+            // Re-check under a row lock so parallel cancel requests cannot refund twice.
+            $booking = TravelBooking::whereKey($booking->id)->lockForUpdate()->first();
+            if ($booking->status !== 'confirmed') {
+                throw new WalletException('Booking is already cancelled.', 422, 'booking_cancelled');
+            }
+
             if ($booking->payment_method === 'crypto') {
                 $this->crypto->refundToHolding($user, $booking->crypto_asset, (float) $booking->crypto_amount);
             } else {

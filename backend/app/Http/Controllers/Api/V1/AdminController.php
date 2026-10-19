@@ -122,7 +122,7 @@ class AdminController extends Controller
             $query->where('status', $status);
         }
 
-        $users = $query->orderByDesc('id')->paginate($request->input('per_page', 15));
+        $users = $query->orderByDesc('id')->paginate($this->perPage($request, 15));
 
         return response()->json([
             'status' => 'success',
@@ -142,8 +142,17 @@ class AdminController extends Controller
         ]);
 
         $user = User::findOrFail($id);
+        if ($user->id === $request->user()->id) {
+            return response()->json(['status' => 'error', 'message' => 'You cannot change your own account status.'], 422);
+        }
+
         $oldStatus = $user->status;
         $user->update(['status' => $request->input('status')]);
+
+        // Suspended / frozen accounts lose every active API session immediately.
+        if (!$user->isActive()) {
+            $user->tokens()->delete();
+        }
 
         $this->auditLogService->log(
             user: $request->user(),
@@ -171,7 +180,7 @@ class AdminController extends Controller
             $query->where('status', $status);
         }
 
-        $wallets = $query->orderByDesc('id')->paginate($request->input('per_page', 15));
+        $wallets = $query->orderByDesc('id')->paginate($this->perPage($request, 15));
 
         return response()->json([
             'status' => 'success',
@@ -200,7 +209,7 @@ class AdminController extends Controller
             $query->where('currency_code', strtoupper($currency));
         }
 
-        $transactions = $query->orderByDesc('id')->paginate($request->input('per_page', 20));
+        $transactions = $query->orderByDesc('id')->paginate($this->perPage($request, 20));
 
         return response()->json([
             'status' => 'success',
@@ -225,7 +234,7 @@ class AdminController extends Controller
             $query->where('severity', $severity);
         }
 
-        $alerts = $query->orderByDesc('id')->paginate($request->input('per_page', 15));
+        $alerts = $query->orderByDesc('id')->paginate($this->perPage($request, 15));
 
         return response()->json([
             'status' => 'success',
@@ -245,11 +254,14 @@ class AdminController extends Controller
         ]);
 
         $alert = FraudAlert::findOrFail($id);
+        $oldStatus = $alert->status;
+        $closed = in_array($request->input('status'), ['resolved', 'dismissed'], true);
         $alert->update([
             'status' => $request->input('status'),
-            'resolved_by' => $request->user()->id,
-            'resolved_at' => in_array($request->input('status'), ['resolved', 'dismissed']) ? now() : null,
+            'resolved_by' => $closed ? $request->user()->id : null,
+            'resolved_at' => $closed ? now() : null,
         ]);
+        $this->auditLogService->log($request->user(), 'admin.fraud_alert_updated', FraudAlert::class, $alert->id, ['status' => $oldStatus], ['status' => $alert->status], $request->ip(), $request->userAgent());
 
         return response()->json([
             'status' => 'success',
@@ -270,7 +282,7 @@ class AdminController extends Controller
             $query->where('severity', $severity);
         }
 
-        $events = $query->orderByDesc('id')->paginate($request->input('per_page', 20));
+        $events = $query->orderByDesc('id')->paginate($this->perPage($request, 20));
 
         return response()->json([
             'status' => 'success',
@@ -303,7 +315,9 @@ class AdminController extends Controller
             'action' => ['sometimes', 'string', 'in:flag,step_up_2fa,hold,block'],
         ]);
 
+        $old = $rule->only(array_keys($data));
         $rule->update($data);
+        $this->auditLogService->log($request->user(), 'admin.fraud_rule_updated', FraudRule::class, $rule->id, $old, $data, $request->ip(), $request->userAgent());
 
         return response()->json([
             'status' => 'success',
@@ -366,7 +380,7 @@ class AdminController extends Controller
             'trial_balance' => $ledger->trialBalance(),
             'recent_entries' => LedgerEntry::with(['ledgerAccount:id,account_number', 'transaction:id,reference_number,type'])
                 ->orderByDesc('id')
-                ->take($request->integer('limit', 40))
+                ->take(min(max($request->integer('limit', 40), 1), 200))
                 ->get(),
         ]);
     }
@@ -440,6 +454,12 @@ class AdminController extends Controller
         }));
     }
 
+    /** Page size from the request, clamped so a huge per_page cannot dump whole tables. */
+    protected function perPage(Request $request, int $default): int
+    {
+        return min(max($request->integer('per_page', $default), 1), 100);
+    }
+
     public function auditLogs(Request $request): JsonResponse
     {
         $query = AuditLog::with('user:id,name,email');
@@ -448,7 +468,7 @@ class AdminController extends Controller
             $query->where('action', 'like', "%{$action}%");
         }
 
-        $logs = $query->orderByDesc('id')->paginate($request->input('per_page', 25));
+        $logs = $query->orderByDesc('id')->paginate($this->perPage($request, 25));
 
         return response()->json([
             'status' => 'success',

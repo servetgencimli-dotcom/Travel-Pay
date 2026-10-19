@@ -141,9 +141,18 @@ class CardController extends Controller
             $request,
             ['card_token' => substr($card->card_token, 0, 12) . '…', 'last_four' => $card->last_four, 'merchant_name' => $data['merchant'], 'category' => $data['category']],
             function () use ($card, $data) {
-                $card->update([
-                    'spent_this_month' => bcadd((string) $card->spent_this_month, number_format((float) $data['amount'], 4, '.', ''), 4),
-                    'status' => $card->is_single_use ? 'used' : $card->status,
+                // Re-check under a row lock so parallel charges cannot exceed the limit or reuse a single-use card.
+                $locked = VirtualCard::whereKey($card->id)->lockForUpdate()->first();
+                $amount = number_format((float) $data['amount'], 4, '.', '');
+                if ($locked->status !== 'active') {
+                    throw new WalletException('Declined: Card is no longer active.', 422, 'card_declined');
+                }
+                if (bccomp($locked->remainingLimit(), $amount, 4) < 0) {
+                    throw new WalletException('Declined: Monthly spending limit exceeded.', 422, 'card_declined');
+                }
+                $locked->update([
+                    'spent_this_month' => bcadd((string) $locked->spent_this_month, $amount, 4),
+                    'status' => $locked->is_single_use ? 'used' : $locked->status,
                 ]);
             }
         );

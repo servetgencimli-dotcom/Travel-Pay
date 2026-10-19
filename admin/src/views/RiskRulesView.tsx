@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ApiClient } from '../services/api';
 import type { FraudRule } from '../types';
 import { Sliders, ToggleLeft, ToggleRight } from 'lucide-react';
@@ -7,11 +7,7 @@ export const RiskRulesView: React.FC = () => {
   const [rules, setRules] = useState<FraudRule[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadRules();
-  }, []);
-
-  const loadRules = async () => {
+  const loadRules = useCallback(async () => {
     try {
       setLoading(true);
       const res = await ApiClient.getFraudRules();
@@ -21,7 +17,11 @@ export const RiskRulesView: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadRules();
+  }, [loadRules]);
 
   const handleToggleActive = async (rule: FraudRule) => {
     try {

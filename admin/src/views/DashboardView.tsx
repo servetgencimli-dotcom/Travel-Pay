@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ApiClient } from '../services/api';
 import { Users, Wallet, ArrowLeftRight, ShieldAlert, TrendingUp } from 'lucide-react';
 
@@ -6,11 +6,7 @@ export const DashboardView: React.FC = () => {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadDashboard();
-  }, []);
-
-  const loadDashboard = async () => {
+  const loadDashboard = useCallback(async () => {
     try {
       setLoading(true);
       const res = await ApiClient.getDashboard();
@@ -20,7 +16,11 @@ export const DashboardView: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadDashboard();
+  }, [loadDashboard]);
 
   if (loading) {
     return <div className="p-8 text-xs text-slate-400">Loading system metrics...</div>;
@@ -106,7 +106,7 @@ export const DashboardView: React.FC = () => {
               ))
             ) : (
               <div className="col-span-3 text-xs text-slate-400 py-4 text-center">
-                Ready for Phase 3 Transfers and QR Payments.
+                No completed transactions yet.
               </div>
             )}
           </div>

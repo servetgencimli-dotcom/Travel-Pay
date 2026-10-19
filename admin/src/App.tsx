@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ApiClient } from './services/api';
 import { Sidebar } from './components/Sidebar';
 import type { NavTab } from './components/Sidebar';
@@ -19,18 +19,7 @@ export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<NavTab>('dashboard');
   const [checkingAuth, setCheckingAuth] = useState(true);
 
-  useEffect(() => {
-    checkAuth();
-
-    const handleUnauthorized = () => {
-      setCurrentUser(null);
-    };
-
-    window.addEventListener('auth:unauthorized', handleUnauthorized);
-    return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
-  }, []);
-
-  const checkAuth = async () => {
+  const checkAuth = useCallback(async () => {
     try {
       setCheckingAuth(true);
       const res = await ApiClient.getMe();
@@ -45,7 +34,18 @@ export const App: React.FC = () => {
     } finally {
       setCheckingAuth(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    checkAuth();
+
+    const handleUnauthorized = () => {
+      setCurrentUser(null);
+    };
+
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
+  }, [checkAuth]);
 
   const handleLogout = async () => {
     try {
