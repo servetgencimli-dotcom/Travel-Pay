@@ -25,6 +25,8 @@ class User extends Authenticatable
         'phone',
         'password',
         'role',
+        'department_id',
+        'user_group_id',
         'status',
         'two_factor_enabled',
         'two_factor_secret',
@@ -65,7 +67,49 @@ class User extends Authenticatable
 
     public function isAdmin(): bool
     {
-        return $this->role === 'admin';
+        return $this->role === 'admin' || $this->isSystemAdmin();
+    }
+
+    public function isSystemAdmin(): bool
+    {
+        if ($this->role === 'admin') {
+            return true;
+        }
+
+        return $this->userGroup && $this->userGroup->slug === 'system_administrator';
+    }
+
+    public function canManagePermissions(): bool
+    {
+        return $this->isSystemAdmin() || $this->hasPermission('manage_permissions');
+    }
+
+    public function canAccessAdmin(): bool
+    {
+        return $this->isAdmin() || $this->user_group_id !== null || $this->hasPermission('view_dashboard');
+    }
+
+    public function hasPermission(string $permissionSlug): bool
+    {
+        if ($this->isSystemAdmin()) {
+            return true;
+        }
+
+        if (!$this->relationLoaded('userGroup')) {
+            $this->load('userGroup.permissions');
+        }
+
+        return $this->userGroup?->permissions->contains('slug', $permissionSlug) ?? false;
+    }
+
+    public function department(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Department::class);
+    }
+
+    public function userGroup(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(UserGroup::class);
     }
 
     public function isActive(): bool

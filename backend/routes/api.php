@@ -136,19 +136,50 @@ Route::prefix('v1')->group(function () {
         Route::prefix('admin')->middleware(['admin'])->group(function () {
             Route::get('dashboard', [AdminController::class, 'dashboard'])->name('api.v1.admin.dashboard');
             Route::get('users', [AdminController::class, 'users'])->name('api.v1.admin.users');
+            Route::post('users', [AdminController::class, 'createUser'])->name('api.v1.admin.users.create');
             Route::patch('users/{id}/status', [AdminController::class, 'updateUserStatus'])->name('api.v1.admin.users.status');
+
+            // Departments & Organization Structure
+            Route::get('departments', [AdminController::class, 'departments'])->name('api.v1.admin.departments');
+            Route::post('departments', [AdminController::class, 'createDepartment'])->name('api.v1.admin.departments.create');
+            Route::put('departments/{id}', [AdminController::class, 'updateDepartment'])->name('api.v1.admin.departments.update');
+            Route::delete('departments/{id}', [AdminController::class, 'deleteDepartment'])->name('api.v1.admin.departments.delete');
+
+            // User Groups & Roles
+            Route::get('user-groups', [AdminController::class, 'userGroups'])->name('api.v1.admin.user-groups');
+            Route::post('user-groups', [AdminController::class, 'createUserGroup'])->name('api.v1.admin.user-groups.create');
+            Route::put('user-groups/{id}', [AdminController::class, 'updateUserGroup'])->name('api.v1.admin.user-groups.update');
+            Route::delete('user-groups/{id}', [AdminController::class, 'deleteUserGroup'])->name('api.v1.admin.user-groups.delete');
+
+            // Permissions (Only System Admin or users with 'manage_permissions' can update)
+            Route::get('permissions', [AdminController::class, 'permissions'])->name('api.v1.admin.permissions');
+            Route::put('user-groups/{id}/permissions', [AdminController::class, 'updateGroupPermissions'])->name('api.v1.admin.user-groups.permissions.update');
+
+            // Wallets & Credits
             Route::get('wallets', [AdminController::class, 'wallets'])->name('api.v1.admin.wallets');
+            Route::post('wallets/{id}/credit', [AdminController::class, 'creditWallet'])->name('api.v1.admin.wallets.credit');
+
+            // Transactions & Audits
             Route::get('transactions', [AdminController::class, 'transactions'])->name('api.v1.admin.transactions');
             Route::post('transactions/{id}/approve', [AdminController::class, 'approveTransaction'])->name('api.v1.admin.transactions.approve');
             Route::post('transactions/{id}/reject', [AdminController::class, 'rejectTransaction'])->name('api.v1.admin.transactions.reject');
+
+            // Fraud Alerts & Rule Engine
             Route::get('fraud-alerts', [AdminController::class, 'fraudAlerts'])->name('api.v1.admin.fraud-alerts');
+            Route::post('fraud-alerts', [AdminController::class, 'createFraudAlert'])->name('api.v1.admin.fraud-alerts.create');
             Route::patch('fraud-alerts/{id}/status', [AdminController::class, 'updateFraudAlertStatus'])->name('api.v1.admin.fraud-alerts.status');
             Route::get('security-events', [AdminController::class, 'securityEvents'])->name('api.v1.admin.security-events');
             Route::get('fraud-rules', [AdminController::class, 'fraudRules'])->name('api.v1.admin.fraud-rules');
+            Route::post('fraud-rules', [AdminController::class, 'createFraudRule'])->name('api.v1.admin.fraud-rules.create');
             Route::put('fraud-rules/{id}', [AdminController::class, 'updateFraudRule'])->name('api.v1.admin.fraud-rules.update');
+
+            // Ledger & Financial Entries
+            Route::get('ledger', [AdminController::class, 'ledger'])->name('api.v1.admin.ledger');
+            Route::post('ledger/entries', [AdminController::class, 'createLedgerEntry'])->name('api.v1.admin.ledger.entries.create');
+
+            // Threat Shield & Travel
             Route::get('travel-analytics', [AdminController::class, 'travelAnalytics'])->name('api.v1.admin.travel-analytics');
             Route::get('audit-logs', [AdminController::class, 'auditLogs'])->name('api.v1.admin.audit-logs');
-            Route::get('ledger', [AdminController::class, 'ledger'])->name('api.v1.admin.ledger');
             Route::get('threats', [AdminController::class, 'threats'])->name('api.v1.admin.threats');
             Route::post('blocked-ips', [AdminController::class, 'blockIp'])->name('api.v1.admin.blocked-ips.store');
             Route::delete('blocked-ips/{id}', [AdminController::class, 'unblockIp'])->name('api.v1.admin.blocked-ips.destroy');

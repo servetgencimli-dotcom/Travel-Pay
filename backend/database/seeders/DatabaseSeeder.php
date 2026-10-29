@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
             ExpenseCategorySeeder::class,
             FraudRuleSeeder::class,
             CryptoAssetSeeder::class,
+            DepartmentAndPermissionSeeder::class,
         ]);
 
         // 2. Administrator Account

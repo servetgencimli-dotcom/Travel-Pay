@@ -13,11 +13,15 @@ import {
   X,
   Scale,
   Ban,
+  Building2,
+  Key,
 } from 'lucide-react';
 
 export type NavTab =
   | 'dashboard'
   | 'users'
+  | 'groups'
+  | 'departments'
   | 'wallets'
   | 'transactions'
   | 'ledger'
@@ -45,7 +49,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'users', label: 'Users Management', icon: Users },
+    { id: 'users', label: 'Users & Wallets', icon: Users },
+    { id: 'groups', label: 'Groups & Permissions', icon: Key },
+    { id: 'departments', label: 'Departments', icon: Building2 },
     { id: 'wallets', label: 'Wallet Overview', icon: Wallet },
     { id: 'transactions', label: 'Transactions', icon: ArrowLeftRight },
     { id: 'ledger', label: 'Ledger & Trial Balance', icon: Scale },

@@ -154,7 +154,7 @@
 
                 <div class="space-y-2">
                     <div class="text-[11px] uppercase tracking-widest text-slate-500 font-bold">Demo accounts (sandbox)</div>
-                    <div class="grid grid-cols-3 gap-2" id="demoAccounts"></div>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2" id="demoAccounts"></div>
                 </div>
             </div>
         </div>
@@ -227,11 +227,11 @@
     </div>
     <div id="toasts" class="fixed bottom-4 right-4 z-[60] space-y-2 w-[calc(100vw-2rem)] sm:w-96"></div>
 
-    <script src="{{ asset('js/travelpay/core.js') }}?v=1"></script>
-    <script src="{{ asset('js/travelpay/wallet.js') }}?v=1"></script>
-    <script src="{{ asset('js/travelpay/travel.js') }}?v=1"></script>
-    <script src="{{ asset('js/travelpay/security.js') }}?v=1"></script>
-    <script src="{{ asset('js/travelpay/admin.js') }}?v=1"></script>
+    <script src="{{ asset('js/travelpay/core.js') }}?v={{ @filemtime(public_path('js/travelpay/core.js')) }}"></script>
+    <script src="{{ asset('js/travelpay/wallet.js') }}?v={{ @filemtime(public_path('js/travelpay/wallet.js')) }}"></script>
+    <script src="{{ asset('js/travelpay/travel.js') }}?v={{ @filemtime(public_path('js/travelpay/travel.js')) }}"></script>
+    <script src="{{ asset('js/travelpay/security.js') }}?v={{ @filemtime(public_path('js/travelpay/security.js')) }}"></script>
+    <script src="{{ asset('js/travelpay/admin.js') }}?v={{ @filemtime(public_path('js/travelpay/admin.js')) }}"></script>
     <script>TP.boot();</script>
 </body>
 </html>

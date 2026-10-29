@@ -26,8 +26,9 @@ export const App: React.FC = () => {
     try {
       setCheckingAuth(true);
       const res = await ApiClient.getMe();
-      if (res.data?.user?.role === 'admin') {
-        setCurrentUser(res.data.user);
+      const user = res.data?.user;
+      if (user?.role === 'admin' || user?.can_access_admin || user?.is_system_admin || (user?.permissions && user.permissions.length > 0)) {
+        setCurrentUser(user);
       } else {
         ApiClient.clearToken();
         setCurrentUser(null);
@@ -78,7 +79,11 @@ export const App: React.FC = () => {
       case 'dashboard':
         return <DashboardView />;
       case 'users':
-        return <UsersView />;
+        return <UsersView currentUser={currentUser} initialTab="users" />;
+      case 'groups':
+        return <UsersView currentUser={currentUser} initialTab="groups" />;
+      case 'departments':
+        return <UsersView currentUser={currentUser} initialTab="departments" />;
       case 'wallets':
         return <WalletsView />;
       case 'transactions':
@@ -104,7 +109,9 @@ export const App: React.FC = () => {
 
   const titles: Record<NavTab, string> = {
     dashboard: 'Executive Financial & Cybersecurity Overview',
-    users: 'Account Holder Registry & Wallet Permissions',
+    users: 'Users & Wallets Management',
+    groups: 'User Groups & Permissions Matrix (RBAC)',
+    departments: 'Departments & Organizational Units',
     wallets: 'Multi-Currency Reserves (AZN, EUR, USD)',
     transactions: 'Cryptographic Ledger & Transaction Audits',
     ledger: 'Double-Entry General Ledger & Trial Balance Verification',

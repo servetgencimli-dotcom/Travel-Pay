@@ -1,9 +1,51 @@
+export interface Department {
+  id: number;
+  name: string;
+  code: string;
+  description?: string | null;
+  manager_name?: string | null;
+  status: 'active' | 'inactive';
+  users_count?: number;
+  user_groups_count?: number;
+  created_at?: string;
+}
+
+export interface Permission {
+  id: number;
+  name: string;
+  slug: string;
+  category: string;
+  description?: string | null;
+  created_at?: string;
+}
+
+export interface UserGroup {
+  id: number;
+  department_id?: number | null;
+  department?: { id: number; name: string; code: string } | null;
+  name: string;
+  slug: string;
+  description?: string | null;
+  is_system: boolean;
+  permissions?: Permission[];
+  users_count?: number;
+  created_at?: string;
+}
+
 export interface User {
   id: number;
   name: string;
   email: string;
   phone?: string | null;
   role: 'user' | 'admin';
+  department_id?: number | null;
+  department?: { id: number; name: string; code: string } | null;
+  user_group_id?: number | null;
+  user_group?: { id: number; name: string; slug: string } | null;
+  permissions?: string[];
+  is_system_admin?: boolean;
+  can_manage_permissions?: boolean;
+  can_access_admin?: boolean;
   status: 'active' | 'suspended' | 'frozen';
   two_factor_enabled: boolean;
   last_login_at?: string | null;

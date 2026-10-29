@@ -8,6 +8,7 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  Plus,
 } from 'lucide-react';
 
 export const FraudMonitoringView: React.FC = () => {
@@ -18,6 +19,27 @@ export const FraudMonitoringView: React.FC = () => {
   const [page, setPage] = useState(1);
   const [meta, setMeta] = useState<any>({ current_page: 1, last_page: 1, total: 0 });
   const [actionLoading, setActionLoading] = useState<number | null>(null);
+
+  // New Fraud Alert Modal state
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [usersList, setUsersList] = useState<any[]>([]);
+  const [alertForm, setAlertForm] = useState({
+    user_id: '',
+    title: '',
+    description: '',
+    severity: 'high' as 'low' | 'medium' | 'high' | 'critical',
+    risk_score: 75,
+  });
+
+  const loadUsersForAlert = async () => {
+    try {
+      const res = await ApiClient.getUsers('', '', '', 1);
+      setUsersList(res.data || []);
+    } catch {
+      // ignore
+    }
+  };
 
   const loadAlerts = useCallback(async (targetPage = page) => {
     try {
@@ -81,6 +103,40 @@ export const FraudMonitoringView: React.FC = () => {
     }
   };
 
+  const handleCreateAlertSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!alertForm.user_id) {
+      alert('Zəhmət olmasa şübhəli istifadəçi hesabını seçin.');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      await ApiClient.createFraudAlert({
+        user_id: Number(alertForm.user_id),
+        title: alertForm.title,
+        description: alertForm.description,
+        severity: alertForm.severity,
+        risk_score: Number(alertForm.risk_score),
+      });
+
+      setShowCreateModal(false);
+      setAlertForm({
+        user_id: '',
+        title: '',
+        description: '',
+        severity: 'high',
+        risk_score: 75,
+      });
+      loadAlerts(1);
+      alert('Yeni Fraud Siqnalı / İnsidenti uğurla qeydə alındı!');
+    } catch (err: any) {
+      alert(err.message || 'Xəta baş verdi.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-[1600px] mx-auto w-full">
       {/* Header and Filters */}
@@ -96,6 +152,17 @@ export const FraudMonitoringView: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => {
+              loadUsersForAlert();
+              setShowCreateModal(true);
+            }}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-400 hover:to-rose-500 text-white text-xs font-bold transition shadow-lg shadow-red-500/20 cursor-pointer shrink-0"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Yeni Fraud İnsidenti Əlavə Et</span>
+          </button>
+
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value)}
@@ -328,6 +395,131 @@ export const FraudMonitoringView: React.FC = () => {
               <span>Next</span>
               <ChevronRight className="w-3.5 h-3.5" />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* CREATE NEW FRAUD ALERT MODAL */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="glass-card w-full max-w-lg rounded-2xl border border-red-500/30 p-6 shadow-2xl relative my-8">
+            <button
+              onClick={() => setShowCreateModal(false)}
+              className="absolute top-5 right-5 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-red-500/20 text-red-400 flex items-center justify-center border border-red-500/30">
+                <ShieldAlert className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Yeni Fraud İnsidenti / Siqnalı Qeydə Al</h3>
+                <p className="text-xs text-slate-400">
+                  Şübhəli hesabı və manual təhlükəsizlik xəbərdarlığını sistemə daxil edin.
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleCreateAlertSubmit} className="space-y-4">
+              <div>
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-300 block mb-1">
+                  Şübhəli İstifadəçi Hesabı *
+                </label>
+                <select
+                  required
+                  value={alertForm.user_id}
+                  onChange={(e) => setAlertForm({ ...alertForm, user_id: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-[#0b1329] border border-white/10 text-white text-xs focus:outline-none focus:border-red-400"
+                >
+                  <option value="">İstifadəçi seçin</option>
+                  {usersList.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name} ({u.email})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-300 block mb-1">
+                  Xəbərdarlıq Başlığı *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={alertForm.title}
+                  onChange={(e) => setAlertForm({ ...alertForm, title: e.target.value })}
+                  placeholder="Məsələn: Qeyri-adi Coğrafi Lokasiyadan Şübhəli Giriş və Çıxarış"
+                  className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-xs focus:outline-none focus:border-red-400"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-300 block mb-1">
+                    Ciddilik Dərəcəsi (Severity) *
+                  </label>
+                  <select
+                    value={alertForm.severity}
+                    onChange={(e) => setAlertForm({ ...alertForm, severity: e.target.value as any })}
+                    className="w-full px-3 py-2 rounded-xl bg-[#0b1329] border border-white/10 text-white text-xs focus:outline-none focus:border-red-400 font-mono"
+                  >
+                    <option value="low">LOW (Aşağı)</option>
+                    <option value="medium">MEDIUM (Orta)</option>
+                    <option value="high">HIGH (Yüksək)</option>
+                    <option value="critical">CRITICAL (Kritik)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-300 block mb-1">
+                    Risk Skoru (0-100) *
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    required
+                    value={alertForm.risk_score}
+                    onChange={(e) => setAlertForm({ ...alertForm, risk_score: Number(e.target.value) })}
+                    className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-amber-400 font-bold text-xs focus:outline-none focus:border-amber-400 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-300 block mb-1">
+                  İnsidentin Ətraflı Təsviri *
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  value={alertForm.description}
+                  onChange={(e) => setAlertForm({ ...alertForm, description: e.target.value })}
+                  placeholder="Təhlükəsizlik analitiki tərəfindən aşkar edilmiş anomaliya və səbəblər..."
+                  className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-xs focus:outline-none focus:border-red-400 resize-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white transition cursor-pointer"
+                >
+                  Ləğv Et
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-400 hover:to-rose-500 text-white text-xs font-bold transition shadow-lg shadow-red-500/20 cursor-pointer disabled:opacity-50"
+                >
+                  {submitting ? 'Qeydə Alınır...' : 'İnsidenti Qeydə Al'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -9,6 +9,8 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   Search,
+  Plus,
+  X,
 } from 'lucide-react';
 
 interface TrialBalanceItem {
@@ -47,6 +49,16 @@ export const LedgerView: React.FC = () => {
   const [accountFilter, setAccountFilter] = useState('');
   const [currencyFilter, setCurrencyFilter] = useState('');
 
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [entryForm, setEntryForm] = useState({
+    account_id: '',
+    entry_type: 'debit' as 'debit' | 'credit',
+    amount: 100,
+    currency_code: 'AZN',
+    description: 'Manual Audit / Balance Adjustment',
+  });
+
   const loadLedger = useCallback(async () => {
     try {
       setLoading(true);
@@ -66,6 +78,33 @@ export const LedgerView: React.FC = () => {
   useEffect(() => {
     loadLedger();
   }, [loadLedger]);
+
+  const handleCreateEntrySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!entryForm.account_id) {
+      alert('Zəhmət olmasa baş kitab hesabı seçin.');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      await ApiClient.createLedgerEntry({
+        account_id: Number(entryForm.account_id),
+        entry_type: entryForm.entry_type,
+        amount: Number(entryForm.amount),
+        currency_code: entryForm.currency_code,
+        description: entryForm.description,
+      });
+
+      setShowCreateModal(false);
+      loadLedger();
+      alert('Manual jurnal qeydi uğurla baş kitaba daxil edildi!');
+    } catch (err: any) {
+      alert(err.message || 'Jurnal qeydi yaradılarkən xəta baş verdi.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const filteredAccounts = accounts.filter((acc) => {
     const matchesCurrency = !currencyFilter || acc.currency_code === currencyFilter;
@@ -90,7 +129,20 @@ export const LedgerView: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => {
+              if (accounts.length > 0) {
+                setEntryForm((prev) => ({ ...prev, account_id: String(accounts[0].id) }));
+              }
+              setShowCreateModal(true);
+            }}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-xs font-bold transition shadow-lg shadow-cyan-500/20 cursor-pointer shrink-0"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Yeni Manual Jurnal Qeydi</span>
+          </button>
+
           <select
             value={limit}
             onChange={(e) => setLimit(Number(e.target.value))}
@@ -336,6 +388,130 @@ export const LedgerView: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* CREATE NEW JOURNAL ENTRY MODAL */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="glass-card w-full max-w-lg rounded-2xl border border-cyan-500/30 p-6 shadow-2xl relative my-8">
+            <button
+              onClick={() => setShowCreateModal(false)}
+              className="absolute top-5 right-5 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center border border-cyan-500/30">
+                <Scale className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Yeni Manual Baş Kitab Qeydi</h3>
+                <p className="text-xs text-slate-400">
+                  Audit və ya balans tənzimləməsi üçün manual debit/kredit qeydi daxil edin.
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleCreateEntrySubmit} className="space-y-4">
+              <div>
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-300 block mb-1">
+                  Baş Kitab Hesabı *
+                </label>
+                <select
+                  required
+                  value={entryForm.account_id}
+                  onChange={(e) => setEntryForm({ ...entryForm, account_id: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-[#0b1329] border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400"
+                >
+                  <option value="">Hesab seçin</option>
+                  {accounts.map((acc) => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.account_number} — {acc.account_name} ({acc.currency_code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-300 block mb-1">
+                    Qeyd Tipi *
+                  </label>
+                  <select
+                    value={entryForm.entry_type}
+                    onChange={(e) => setEntryForm({ ...entryForm, entry_type: e.target.value as any })}
+                    className="w-full px-3 py-2 rounded-xl bg-[#0b1329] border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400 font-mono font-bold"
+                  >
+                    <option value="debit">DEBIT (+)</option>
+                    <option value="credit">CREDIT (-)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-300 block mb-1">
+                    Valyuta *
+                  </label>
+                  <select
+                    value={entryForm.currency_code}
+                    onChange={(e) => setEntryForm({ ...entryForm, currency_code: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-[#0b1329] border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400 font-mono"
+                  >
+                    <option value="AZN">AZN (₼)</option>
+                    <option value="EUR">EUR (€)</option>
+                    <option value="USD">USD ($)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-300 block mb-1">
+                    Məbləğ *
+                  </label>
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    required
+                    value={entryForm.amount}
+                    onChange={(e) => setEntryForm({ ...entryForm, amount: Number(e.target.value) })}
+                    className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-cyan-400 font-bold text-xs focus:outline-none focus:border-cyan-400 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-300 block mb-1">
+                  Açıqlama / Səbəb *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={entryForm.description}
+                  onChange={(e) => setEntryForm({ ...entryForm, description: e.target.value })}
+                  placeholder="Məsələn: Rübün sonu valyuta rezervi düzəlişi"
+                  className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white transition cursor-pointer"
+                >
+                  Ləğv Et
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-xs font-bold transition shadow-lg shadow-cyan-500/20 cursor-pointer disabled:opacity-50"
+                >
+                  {submitting ? 'Yadda Saxlanılır...' : 'Jurnala Daxil Et'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

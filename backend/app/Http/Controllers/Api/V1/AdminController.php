@@ -3,21 +3,25 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\UserResource;
 use App\Models\AuditLog;
 use App\Models\BlockedIp;
 use App\Models\CryptoHolding;
+use App\Models\Department;
 use App\Models\FraudAlert;
 use App\Models\FraudRule;
 use App\Models\KycVerification;
 use App\Models\LedgerAccount;
 use App\Models\LedgerEntry;
 use App\Models\Merchant;
+use App\Models\Permission;
 use App\Models\SecurityEvent;
 use App\Models\Transaction;
 use App\Models\TravelBooking;
 use App\Models\TravelExpense;
 use App\Models\Trip;
 use App\Models\User;
+use App\Models\UserGroup;
 use App\Models\Wallet;
 use App\Models\WalletBalance;
 use App\Services\Fraud\FraudDetectionService;
@@ -28,6 +32,8 @@ use App\Services\Wallet\WalletService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class AdminController extends Controller
 {
@@ -104,7 +110,7 @@ class AdminController extends Controller
 
     public function users(Request $request): JsonResponse
     {
-        $query = User::with(['wallet.balances', 'devices']);
+        $query = User::with(['wallet.balances', 'devices', 'department', 'userGroup.permissions']);
 
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search) {
@@ -122,11 +128,19 @@ class AdminController extends Controller
             $query->where('status', $status);
         }
 
+        if ($deptId = $request->input('department_id')) {
+            $query->where('department_id', $deptId);
+        }
+
+        if ($groupId = $request->input('user_group_id')) {
+            $query->where('user_group_id', $groupId);
+        }
+
         $users = $query->orderByDesc('id')->paginate($this->perPage($request, 15));
 
         return response()->json([
             'status' => 'success',
-            'data' => $users->items(),
+            'data' => UserResource::collection($users->items()),
             'meta' => [
                 'current_page' => $users->currentPage(),
                 'last_page' => $users->lastPage(),
@@ -478,6 +492,538 @@ class AdminController extends Controller
                 'last_page' => $logs->lastPage(),
                 'total' => $logs->total(),
             ],
+        ]);
+    }
+
+    public function createUser(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
+            'phone' => ['required', 'string', 'max:50'],
+            'password' => ['required', 'string', 'min:8'],
+            'role' => ['required', 'string', 'in:user,admin'],
+            'department_id' => ['nullable', 'exists:departments,id'],
+            'user_group_id' => ['nullable', 'exists:user_groups,id'],
+            'status' => ['sometimes', 'string', 'in:active,suspended,frozen'],
+            'initial_azn' => ['nullable', 'numeric', 'min:0'],
+            'initial_eur' => ['nullable', 'numeric', 'min:0'],
+            'initial_usd' => ['nullable', 'numeric', 'min:0'],
+        ]);
+
+        $user = User::create([
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'phone' => $data['phone'],
+            'password' => Hash::make($data['password']),
+            'role' => $data['role'],
+            'department_id' => $data['department_id'] ?? null,
+            'user_group_id' => $data['user_group_id'] ?? null,
+            'status' => $data['status'] ?? 'active',
+            'email_verified_at' => now(),
+        ]);
+
+        // Provision Digital Wallet
+        $wallet = Wallet::create([
+            'user_id' => $user->id,
+            'wallet_number' => 'TP' . str_pad((string) $user->id, 12, '0', STR_PAD_LEFT),
+            'status' => 'active',
+        ]);
+
+        $balances = [
+            'AZN' => (float) ($data['initial_azn'] ?? 0),
+            'EUR' => (float) ($data['initial_eur'] ?? 0),
+            'USD' => (float) ($data['initial_usd'] ?? 0),
+        ];
+
+        foreach ($balances as $currency => $amount) {
+            WalletBalance::create([
+                'wallet_id' => $wallet->id,
+                'currency_code' => $currency,
+                'balance' => $amount,
+                'locked_balance' => 0.0000,
+            ]);
+        }
+
+        $user->load(['wallet.balances', 'department', 'userGroup.permissions']);
+
+        $this->auditLogService->log(
+            $request->user(),
+            'admin.user_created',
+            User::class,
+            $user->id,
+            null,
+            ['name' => $user->name, 'email' => $user->email, 'role' => $user->role, 'department_id' => $user->department_id, 'user_group_id' => $user->user_group_id],
+            $request->ip(),
+            $request->userAgent()
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Yeni istifadəçi ({$user->name}) uğurla yaradıldı və departament/qrup təyin edildi.",
+            'data' => new UserResource($user),
+        ], 201);
+    }
+
+    public function departments(): JsonResponse
+    {
+        $departments = Department::withCount(['users', 'userGroups'])
+            ->orderBy('id')
+            ->get();
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $departments,
+        ]);
+    }
+
+    public function createDepartment(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'code' => ['required', 'string', 'max:50', 'unique:departments,code'],
+            'description' => ['nullable', 'string'],
+            'manager_name' => ['nullable', 'string', 'max:255'],
+            'status' => ['sometimes', 'string', 'in:active,inactive'],
+        ]);
+
+        $dept = Department::create($data);
+
+        $this->auditLogService->log(
+            $request->user(),
+            'admin.department_created',
+            Department::class,
+            $dept->id,
+            null,
+            $dept->toArray(),
+            $request->ip(),
+            $request->userAgent()
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Yeni departament ({$dept->name}) uğurla yaradıldı.",
+            'data' => $dept,
+        ], 201);
+    }
+
+    public function updateDepartment(Request $request, int $id): JsonResponse
+    {
+        $dept = Department::findOrFail($id);
+
+        $data = $request->validate([
+            'name' => ['sometimes', 'string', 'max:255'],
+            'code' => ['sometimes', 'string', 'max:50', 'unique:departments,code,' . $dept->id],
+            'description' => ['nullable', 'string'],
+            'manager_name' => ['nullable', 'string', 'max:255'],
+            'status' => ['sometimes', 'string', 'in:active,inactive'],
+        ]);
+
+        $old = $dept->only(array_keys($data));
+        $dept->update($data);
+
+        $this->auditLogService->log(
+            $request->user(),
+            'admin.department_updated',
+            Department::class,
+            $dept->id,
+            $old,
+            $data,
+            $request->ip(),
+            $request->userAgent()
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Departament məlumatları yeniləndi.',
+            'data' => $dept,
+        ]);
+    }
+
+    public function deleteDepartment(Request $request, int $id): JsonResponse
+    {
+        $dept = Department::withCount('users')->findOrFail($id);
+
+        if ($dept->users_count > 0) {
+            return response()->json([
+                'status' => 'error',
+                'message' => "Bu departamentə bağlı {$dept->users_count} istifadəçi var. Silmədən öncə istifadəçiləri başqa departamentə köçürün.",
+            ], 422);
+        }
+
+        $old = $dept->toArray();
+        $dept->delete();
+
+        $this->auditLogService->log(
+            $request->user(),
+            'admin.department_deleted',
+            Department::class,
+            $id,
+            $old,
+            null,
+            $request->ip(),
+            $request->userAgent()
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Departament uğurla silindi.',
+        ]);
+    }
+
+    public function userGroups(): JsonResponse
+    {
+        $groups = UserGroup::with(['department:id,name,code', 'permissions'])
+            ->withCount('users')
+            ->orderBy('id')
+            ->get();
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $groups,
+        ]);
+    }
+
+    public function createUserGroup(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'department_id' => ['nullable', 'exists:departments,id'],
+            'description' => ['nullable', 'string'],
+            'permission_ids' => ['nullable', 'array'],
+            'permission_ids.*' => ['exists:permissions,id'],
+        ]);
+
+        $slug = Str::slug($data['name'], '_');
+        $originalSlug = $slug;
+        $counter = 1;
+        while (UserGroup::where('slug', $slug)->exists()) {
+            $slug = "{$originalSlug}_{$counter}";
+            $counter++;
+        }
+
+        $group = UserGroup::create([
+            'name' => $data['name'],
+            'slug' => $slug,
+            'department_id' => $data['department_id'] ?? null,
+            'description' => $data['description'] ?? null,
+            'is_system' => false,
+        ]);
+
+        if (!empty($data['permission_ids'])) {
+            $group->permissions()->sync($data['permission_ids']);
+        }
+
+        $group->load(['department', 'permissions']);
+
+        $this->auditLogService->log(
+            $request->user(),
+            'admin.user_group_created',
+            UserGroup::class,
+            $group->id,
+            null,
+            $group->toArray(),
+            $request->ip(),
+            $request->userAgent()
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Yeni istifadəçi qrupu ({$group->name}) uğurla yaradıldı.",
+            'data' => $group,
+        ], 201);
+    }
+
+    public function updateUserGroup(Request $request, int $id): JsonResponse
+    {
+        $group = UserGroup::findOrFail($id);
+
+        $data = $request->validate([
+            'name' => ['sometimes', 'string', 'max:255'],
+            'department_id' => ['nullable', 'exists:departments,id'],
+            'description' => ['nullable', 'string'],
+        ]);
+
+        $old = $group->only(array_keys($data));
+        $group->update($data);
+
+        $this->auditLogService->log(
+            $request->user(),
+            'admin.user_group_updated',
+            UserGroup::class,
+            $group->id,
+            $old,
+            $data,
+            $request->ip(),
+            $request->userAgent()
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Qrup məlumatları yeniləndi.',
+            'data' => $group->load(['department', 'permissions']),
+        ]);
+    }
+
+    public function deleteUserGroup(Request $request, int $id): JsonResponse
+    {
+        $group = UserGroup::withCount('users')->findOrFail($id);
+
+        if ($group->is_system) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Sistem qrupunu silmək olmaz.',
+            ], 422);
+        }
+
+        if ($group->users_count > 0) {
+            return response()->json([
+                'status' => 'error',
+                'message' => "Bu qrupa bağlı {$group->users_count} istifadəçi var. Qrupu silmədən öncə istifadəçiləri başqa qrupa təyin edin.",
+            ], 422);
+        }
+
+        $old = $group->toArray();
+        $group->permissions()->detach();
+        $group->delete();
+
+        $this->auditLogService->log(
+            $request->user(),
+            'admin.user_group_deleted',
+            UserGroup::class,
+            $id,
+            $old,
+            null,
+            $request->ip(),
+            $request->userAgent()
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'İstifadəçi qrupu silindi.',
+        ]);
+    }
+
+    public function permissions(): JsonResponse
+    {
+        $permissions = Permission::orderBy('category')->orderBy('id')->get();
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $permissions,
+        ]);
+    }
+
+    public function updateGroupPermissions(Request $request, int $groupId): JsonResponse
+    {
+        // STRICT AUTHORIZATION ENFORCEMENT:
+        // Only System Administrator OR users who possess the 'manage_permissions' permission can grant/change permissions!
+        if (!$request->user()->canManagePermissions()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'İcazə verilmədi! Yalnız Sistem Administratoru və ya "İcazələri İdarə Etmə" (manage_permissions) səlahiyyəti olan istifadəçilər icazələri dəyişə bilər.',
+            ], 403);
+        }
+
+        $request->validate([
+            'permission_ids' => ['present', 'array'],
+            'permission_ids.*' => ['exists:permissions,id'],
+        ]);
+
+        $group = UserGroup::findOrFail($groupId);
+
+        $oldPermissions = $group->permissions()->pluck('slug')->toArray();
+        $group->permissions()->sync($request->input('permission_ids'));
+        $newPermissions = $group->permissions()->pluck('slug')->toArray();
+
+        $this->auditLogService->log(
+            $request->user(),
+            'admin.group_permissions_updated',
+            UserGroup::class,
+            $group->id,
+            ['permissions' => $oldPermissions],
+            ['permissions' => $newPermissions],
+            $request->ip(),
+            $request->userAgent()
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "'{$group->name}' qrupunun icazələri uğurla yeniləndi.",
+            'data' => $group->load(['department', 'permissions']),
+        ]);
+    }
+
+    public function createFraudRule(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'rule_name' => ['required', 'string', 'max:255'],
+            'rule_code' => ['required', 'string', 'max:50', 'unique:fraud_rules,rule_code'],
+            'description' => ['required', 'string'],
+            'rule_type' => ['required', 'string', 'max:50'],
+            'condition_operator' => ['required', 'string', 'max:10'],
+            'threshold_value' => ['required', 'string'],
+            'risk_weight' => ['required', 'integer', 'min:0', 'max:100'],
+            'action' => ['required', 'string', 'in:flag,step_up_2fa,hold,block'],
+            'is_active' => ['sometimes', 'boolean'],
+        ]);
+
+        $rule = FraudRule::create($data);
+
+        $this->auditLogService->log(
+            $request->user(),
+            'admin.fraud_rule_created',
+            FraudRule::class,
+            $rule->id,
+            null,
+            $rule->toArray(),
+            $request->ip(),
+            $request->userAgent()
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Yeni Fraud Qaydası / Riski ({$rule->rule_name}) uğurla əlavə edildi.",
+            'data' => $rule,
+        ], 201);
+    }
+
+    public function createFraudAlert(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'user_id' => ['required', 'exists:users,id'],
+            'title' => ['required', 'string', 'max:255'],
+            'description' => ['required', 'string'],
+            'severity' => ['required', 'string', 'in:low,medium,high,critical'],
+            'risk_score' => ['required', 'integer', 'min:0', 'max:100'],
+            'details' => ['nullable', 'array'],
+        ]);
+
+        $alert = FraudAlert::create([
+            'user_id' => $data['user_id'],
+            'title' => $data['title'],
+            'description' => $data['description'],
+            'severity' => $data['severity'],
+            'risk_score' => $data['risk_score'],
+            'status' => 'new',
+            'details' => $data['details'] ?? ['source' => 'Manual Risk Assessment / Admin Console'],
+            'triggered_rules' => ['MANUAL_INVESTIGATION_FLAG'],
+        ]);
+
+        $this->auditLogService->log(
+            $request->user(),
+            'admin.fraud_alert_created',
+            FraudAlert::class,
+            $alert->id,
+            null,
+            $alert->toArray(),
+            $request->ip(),
+            $request->userAgent()
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Yeni Fraud Siqnalı / İnsidenti qeydə alındı.',
+            'data' => $alert->load('user:id,name,email'),
+        ], 201);
+    }
+
+    public function createLedgerEntry(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'account_id' => ['required', 'exists:ledger_accounts,id'],
+            'entry_type' => ['required', 'string', 'in:debit,credit'],
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'currency_code' => ['required', 'string', 'size:3'],
+            'description' => ['required', 'string', 'max:255'],
+            'reference' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $account = LedgerAccount::findOrFail($data['account_id']);
+
+        $entry = LedgerEntry::create([
+            'ledger_account_id' => $account->id,
+            'entry_type' => $data['entry_type'],
+            'amount' => $data['amount'],
+            'currency_code' => strtoupper($data['currency_code']),
+            'description' => $data['description'],
+            'reference' => $data['reference'] ?? ('MANUAL-' . strtoupper(Str::random(8))),
+            'posted_at' => now(),
+        ]);
+
+        // Adjust ledger account balance
+        if ($data['entry_type'] === 'debit') {
+            $account->increment('balance', $data['amount']);
+        } else {
+            $account->decrement('balance', $data['amount']);
+        }
+
+        $this->auditLogService->log(
+            $request->user(),
+            'admin.ledger_entry_created',
+            LedgerEntry::class,
+            $entry->id,
+            null,
+            $entry->toArray(),
+            $request->ip(),
+            $request->userAgent()
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Manual jurnal qeydi uğurla baş kitaba daxil edildi.',
+            'data' => $entry->load('account'),
+        ], 201);
+    }
+
+    public function creditWallet(Request $request, int $walletId): JsonResponse
+    {
+        $wallet = Wallet::with('user')->findOrFail($walletId);
+
+        $data = $request->validate([
+            'currency_code' => ['required', 'string', 'size:3'],
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'reason' => ['required', 'string', 'max:255'],
+        ]);
+
+        $currency = strtoupper($data['currency_code']);
+        $amount = (float) $data['amount'];
+
+        $balance = WalletBalance::firstOrCreate(
+            ['wallet_id' => $wallet->id, 'currency_code' => $currency],
+            ['balance' => 0.0000, 'locked_balance' => 0.0000]
+        );
+
+        $oldBalance = (float) $balance->balance;
+        $balance->increment('balance', $amount);
+
+        // Record a transaction record for audit trace
+        Transaction::create([
+            'user_id' => $wallet->user_id,
+            'wallet_id' => $wallet->id,
+            'type' => 'top_up',
+            'status' => 'completed',
+            'amount' => $amount,
+            'currency_code' => $currency,
+            'reference_number' => 'ADMIN-CREDIT-' . strtoupper(Str::random(10)),
+            'description' => 'Admin Manual Credit: ' . $data['reason'],
+        ]);
+
+        $this->auditLogService->log(
+            $request->user(),
+            'admin.wallet_credited',
+            Wallet::class,
+            $wallet->id,
+            ['balance' => $oldBalance, 'currency' => $currency],
+            ['balance' => $balance->balance, 'amount' => $amount, 'reason' => $data['reason']],
+            $request->ip(),
+            $request->userAgent()
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Pul kisəsinə {$amount} {$currency} məbləğində vəsait əlavə edildi.",
+            'data' => $wallet->load('balances'),
         ]);
     }
 }

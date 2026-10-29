@@ -77,6 +77,8 @@
         { section: 'Administration', admin: true, items: [
             { id: 'admin', label: 'Admin Overview', icon: 'grid' },
             { id: 'admin-users', label: 'Users & Wallets', icon: 'users' },
+            { id: 'admin-groups', label: 'Groups & Permissions', icon: 'lock' },
+            { id: 'admin-departments', label: 'Departments', icon: 'bank' },
             { id: 'admin-transactions', label: 'Transaction Review', icon: 'review', badge: 'held' },
             { id: 'admin-alerts', label: 'Fraud Alerts', icon: 'alert', badge: 'alerts' },
             { id: 'admin-rules', label: 'Fraud Rules', icon: 'sliders' },
@@ -462,7 +464,7 @@
     // ------------------------------------------------------------------
     function renderNav() {
         const nav = document.getElementById('sidebarNav');
-        const isAdmin = TP.user && TP.user.role === 'admin';
+        const isAdmin = TP.user && (TP.user.role === 'admin' || TP.user.can_access_admin || TP.user.is_system_admin || (TP.user.permissions && TP.user.permissions.length > 0));
         nav.innerHTML = NAV.filter((g) => !g.admin || isAdmin).map((group) => `
             <div class="nav-section mt-4 first:mt-0 mb-1 px-3"><span class="nav-section-label uppercase font-bold text-slate-500">${group.section}</span></div>
             ${group.items.map((item) => `
@@ -514,7 +516,14 @@
         document.body.classList.remove('sb-open');
         document.getElementById('sbOverlay').classList.add('hidden');
 
-        if (!page || (page.admin && TP.user.role !== 'admin')) {
+        const canAccessAdmin = TP.user && (TP.user.role === 'admin' || TP.user.can_access_admin || TP.user.is_system_admin || (TP.user.permissions && TP.user.permissions.length > 0));
+        if (!page) {
+            location.hash = '#/dashboard';
+            return;
+        }
+
+        if (page.admin && !canAccessAdmin) {
+            TP.toast('Bu bölməyə yalnız Administrator hesabı və ya səlahiyyəti olan istifadəçilər daxil ola bilər.', 'warn');
             location.hash = '#/dashboard';
             return;
         }
@@ -572,9 +581,11 @@
     // Auth
     // ------------------------------------------------------------------
     const DEMO = [
+        { email: 'admin@travelpay.com', label: 'SysAdmin', color: 'cyan' },
+        { email: 'rashad.security@travelpay.com', label: 'PermsAdmin', color: 'purple' },
+        { email: 'orkhan.risk@travelpay.com', label: 'Risk Lead', color: 'amber' },
         { email: 'elvin@travelpay.com', label: 'Traveller', color: 'emerald' },
-        { email: 'aysel@travelpay.com', label: 'Friend (P2P)', color: 'purple' },
-        { email: 'admin@travelpay.com', label: 'Admin', color: 'cyan' },
+        { email: 'aysel@travelpay.com', label: 'Friend (P2P)', color: 'blue' },
     ];
 
     function showAuth() {

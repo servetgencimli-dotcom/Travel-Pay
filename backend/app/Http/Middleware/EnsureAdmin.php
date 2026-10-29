@@ -13,10 +13,10 @@ class EnsureAdmin
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if (!$request->user() || !$request->user()->isAdmin()) {
+        if (!$request->user() || !$request->user()->canAccessAdmin()) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Unauthorized. Administrator access required.',
+                'message' => 'Unauthorized. Administrator or authorized staff access required.',
             ], 403);
         }
 

@@ -73,17 +73,31 @@
     // ------------------------------------------------------------------
     // Users
     // ------------------------------------------------------------------
+    // ------------------------------------------------------------------
+    // Users
+    // ------------------------------------------------------------------
     TP.pages['admin-users'] = {
         title: 'Users & Wallets',
         admin: true,
         async render(el) {
-            const state = { page: 1, search: '', role: '', status: '' };
+            const state = { page: 1, search: '', role: '', status: '', department_id: '', user_group_id: '' };
+            const [{ data: depts }, { data: groups }] = await Promise.all([
+                TP.api('/admin/departments').catch(() => ({ data: [] })),
+                TP.api('/admin/user-groups').catch(() => ({ data: [] })),
+            ]);
+
             el.innerHTML = `
             <div class="space-y-4">
-                <form id="uf" class="glass rounded-2xl p-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <input class="input col-span-2" name="search" placeholder="Search name, email, phone…">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <p class="text-xs text-slate-400">Platform user accounts, assigned departments, and authority groups.</p>
+                    <button id="btnNewUser" class="btn btn-primary btn-sm flex items-center gap-1.5">${TP.icon('plus', 'w-4 h-4')} Create User</button>
+                </div>
+                <form id="uf" class="glass rounded-2xl p-4 grid grid-cols-2 md:grid-cols-5 gap-3">
+                    <input class="input col-span-2 md:col-span-1" name="search" placeholder="Search: name, email, phone…">
                     <select class="input" name="role"><option value="">All roles</option>${options(['user', 'merchant', 'admin'])}</select>
                     <select class="input" name="status"><option value="">All statuses</option>${options(['active', 'frozen', 'suspended'])}</select>
+                    <select class="input" name="department_id"><option value="">All departments</option>${depts.map(d => `<option value="${d.id}">${h(d.name)}</option>`).join('')}</select>
+                    <select class="input" name="user_group_id"><option value="">All groups</option>${groups.map(g => `<option value="${g.id}">${h(g.name)}</option>`).join('')}</select>
                 </form>
                 <div class="glass rounded-2xl p-2 overflow-x-auto" id="ut"></div>
             </div>`;
@@ -91,13 +105,21 @@
             const bal = (u, c) => u.wallet?.balances?.find((b) => b.currency_code === c)?.balance ?? 0;
             const load = async () => {
                 const res = await TP.api('/admin/users', { query: { ...state, per_page: 15 } });
-                box.innerHTML = `<table class="data w-full"><thead><tr><th>User</th><th>Role</th><th>Wallet</th><th class="text-right">AZN</th><th class="text-right">EUR</th><th class="text-right">USD</th><th>2FA</th><th>Status</th><th></th></tr></thead><tbody>
+                box.innerHTML = `<table class="data w-full"><thead><tr><th>User</th><th>Department</th><th>Group</th><th>Role</th><th>Wallet</th><th class="text-right">AZN</th><th class="text-right">EUR</th><th class="text-right">USD</th><th>Status</th><th class="text-right">Action</th></tr></thead><tbody>
                     ${res.data.map((u) => `<tr>
-                        <td><div class="font-semibold text-white">${h(u.name)}</div><div class="text-[11px] text-slate-500 font-mono">${h(u.email)}</div></td>
+                        <td>
+                            <div class="font-semibold text-white flex items-center gap-1">
+                                <span>${h(u.name)}</span>
+                                ${u.is_system_admin ? '<span class="chip bg-red-500/20 text-red-300 border-red-500/30 text-[9px] uppercase font-mono font-bold">SysAdmin</span>' : ''}
+                                ${u.can_manage_permissions && !u.is_system_admin ? '<span class="chip bg-cyan-500/20 text-cyan-300 border-cyan-500/30 text-[9px] uppercase font-mono font-bold">PermsAdmin</span>' : ''}
+                            </div>
+                            <div class="text-[11px] text-slate-500 font-mono">${h(u.email)}</div>
+                        </td>
+                        <td>${u.department ? `<span class="chip bg-emerald-500/10 text-emerald-300 border-emerald-500/20 text-[11px]">${h(u.department.name)}</span>` : '<span class="text-slate-500 text-xs italic">—</span>'}</td>
+                        <td>${u.user_group ? `<span class="chip bg-purple-500/10 text-purple-300 border-purple-500/20 text-[11px]">${h(u.user_group.name)}</span>` : '<span class="text-slate-500 text-xs italic">—</span>'}</td>
                         <td>${chip(u.role, u.role === 'admin' ? 'cyan' : u.role === 'merchant' ? 'amber' : 'slate')}</td>
                         <td class="font-mono text-xs text-cyan-300">${h(u.wallet?.wallet_number || '—')}</td>
                         <td class="text-right font-mono">${num(bal(u, 'AZN'))}</td><td class="text-right font-mono">${num(bal(u, 'EUR'))}</td><td class="text-right font-mono">${num(bal(u, 'USD'))}</td>
-                        <td>${u.two_factor_enabled ? chip('on', 'green') : chip('off', 'slate')}</td>
                         <td>${statusChip(u.status)}</td>
                         <td class="text-right">${u.id !== TP.user.id ? `<button class="btn btn-sm ${u.status === 'active' ? 'btn-danger' : 'btn-ghost'}" data-status="${u.status === 'active' ? 'frozen' : 'active'}" data-id="${u.id}">${u.status === 'active' ? 'Freeze' : 'Activate'}</button>` : ''}</td>
                     </tr>`).join('')}</tbody></table>`;
@@ -106,9 +128,345 @@
                     if (await TP.action(() => TP.api(`/admin/users/${b.dataset.id}/status`, { method: 'PATCH', body: { status: b.dataset.status } }))) load();
                 }));
             };
+
+            el.querySelector('#btnNewUser').addEventListener('click', () => {
+                TP.modal(`
+                    <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">${TP.icon('users', 'w-5 h-5 text-cyan-400')} Create New User</h3>
+                    <form id="newUserForm" class="space-y-3">
+                        <div><label class="label">Full Name *</label><input class="input" name="name" required placeholder="John Doe"></div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div><label class="label">Email *</label><input class="input" name="email" type="email" required placeholder="user@travelpay.com"></div>
+                            <div><label class="label">Phone</label><input class="input" name="phone" value="+99450"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div><label class="label">Password *</label><input class="input" name="password" type="password" value="Password123!" required></div>
+                            <div><label class="label">Role</label><select class="input" name="role"><option value="user">Standard User</option><option value="admin">Administrator</option></select></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div><label class="label">Department</label><select class="input" name="department_id"><option value="">— Unassigned —</option>${depts.map(d => `<option value="${d.id}">${h(d.name)}</option>`).join('')}</select></div>
+                            <div><label class="label">User Group</label><select class="input" name="user_group_id"><option value="">— Unassigned —</option>${groups.map(g => `<option value="${g.id}">${h(g.name)}</option>`).join('')}</select></div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div><label class="label">Initial AZN</label><input class="input font-mono" type="number" name="initial_azn" value="1000"></div>
+                            <div><label class="label">Initial EUR</label><input class="input font-mono" type="number" name="initial_eur" value="500"></div>
+                            <div><label class="label">Initial USD</label><input class="input font-mono" type="number" name="initial_usd" value="500"></div>
+                        </div>
+                        <div class="flex justify-end gap-2 pt-3">
+                            <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+                            <button type="submit" class="btn btn-primary">Create User</button>
+                        </div>
+                    </form>
+                `, (box) => {
+                    box.querySelector('#newUserForm').addEventListener('submit', async (e) => {
+                        e.preventDefault();
+                        const fd = new FormData(e.target);
+                        const body = Object.fromEntries(fd.entries());
+                        ['initial_azn', 'initial_eur', 'initial_usd'].forEach(k => body[k] = Number(body[k] || 0));
+                        if (!body.department_id) delete body.department_id;
+                        if (!body.user_group_id) delete body.user_group_id;
+                        await TP.action(() => TP.api('/admin/users', { method: 'POST', body }), 'User created successfully!');
+                        TP.closeModal();
+                        load();
+                    });
+                });
+            });
+
             let t;
             el.querySelector('#uf').addEventListener('input', (e) => { clearTimeout(t); t = setTimeout(() => { state[e.target.name] = e.target.value; state.page = 1; load(); }, 250); });
             await load();
+        },
+    };
+
+    // ------------------------------------------------------------------
+    // User Groups & Permissions
+    // ------------------------------------------------------------------
+    TP.pages['admin-groups'] = {
+        title: 'User Groups & Permissions (RBAC)',
+        admin: true,
+        async render(el) {
+            const canManage = TP.user?.is_system_admin || TP.user?.can_manage_permissions || TP.user?.role === 'admin';
+            const [{ data: groups }, { data: depts }, { data: perms }] = await Promise.all([
+                TP.api('/admin/user-groups'),
+                TP.api('/admin/departments').catch(() => ({ data: [] })),
+                TP.api('/admin/permissions').catch(() => ({ data: [] })),
+            ]);
+
+            el.innerHTML = `
+            <div class="space-y-6">
+                <!-- Permission info banner -->
+                <div class="p-4 rounded-xl border flex items-center justify-between gap-4 ${canManage ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-300' : 'bg-amber-500/10 border-amber-500/30 text-amber-300'}">
+                    <div class="flex items-center gap-3">
+                        <span class="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">${TP.icon(canManage ? 'check' : 'lock', 'w-5 h-5')}</span>
+                        <div class="text-xs">
+                            ${canManage ? '<strong>Authority Confirmed:</strong> You are System Administrator or hold the <code class="font-mono bg-cyan-950 px-1 py-0.5 rounded">manage_permissions</code> privilege. You can assign and configure group permissions.' : '<strong>Restricted Access:</strong> Only System Administrators or users with <code class="font-mono bg-amber-950 px-1 py-0.5 rounded">manage_permissions</code> can modify permissions (Read-only mode).'}
+                        </div>
+                    </div>
+                    <span class="text-[10px] font-mono uppercase px-2.5 py-1 rounded bg-black/40 font-bold shrink-0">${canManage ? 'FULL ACCESS' : 'READ ONLY'}</span>
+                </div>
+
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-base font-bold text-white">User Groups & Authority Profiles</h2>
+                        <p class="text-xs text-slate-400">Click <b>Configure Permissions</b> on any group to customize assigned access rights.</p>
+                    </div>
+                    <button id="btnNewGroup" class="btn btn-primary btn-sm flex items-center gap-1.5">${TP.icon('plus', 'w-4 h-4')} Create Group</button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5" id="groupList">
+                    ${groups.map((g) => {
+                        const hasManagePerms = (g.permissions || []).some(p => p.slug === 'manage_permissions');
+                        return `
+                        <div class="glass rounded-2xl p-5 flex flex-col justify-between space-y-4 border border-white/10 hover:border-purple-500/30 transition">
+                            <div class="space-y-3">
+                                <div class="flex items-start justify-between">
+                                    <div>
+                                        <div class="flex items-center gap-2">
+                                            <h3 class="text-base font-bold text-white">${h(g.name)}</h3>
+                                            ${g.is_system ? '<span class="chip bg-red-500/20 text-red-300 border-red-500/30 text-[9px] uppercase font-mono font-bold">System</span>' : ''}
+                                        </div>
+                                        <span class="font-mono text-[11px] text-purple-400 font-semibold block mt-0.5">slug: ${h(g.slug)}</span>
+                                    </div>
+                                    ${!g.is_system ? `<button class="text-slate-500 hover:text-red-400 p-1" data-del-group="${g.id}">${TP.icon('x', 'w-4 h-4')}</button>` : ''}
+                                </div>
+
+                                ${g.department ? `<div class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/5 text-slate-300 text-xs border border-white/5">${TP.icon('bank', 'w-3.5 h-3.5 text-cyan-400')} <span>Department: <b class="text-white">${h(g.department.name)}</b></span></div>` : ''}
+
+                                <p class="text-xs text-slate-400">${h(g.description || 'No description provided.')}</p>
+
+                                ${hasManagePerms ? `<div class="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 text-[11px] flex items-center gap-2">${TP.icon('sparkle', 'w-4 h-4 text-cyan-400 shrink-0')}<span>Special Authority: Users in this group can grant/modify permissions!</span></div>` : ''}
+
+                                <div>
+                                    <div class="text-[11px] uppercase font-bold text-slate-400 mb-2 flex items-center justify-between">
+                                        <span>Assigned permissions (${(g.permissions || []).length}):</span>
+                                        <span class="text-slate-500 font-mono">${g.users_count || 0} members</span>
+                                    </div>
+                                    <div class="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto custom-scrollbar p-1">
+                                        ${(g.permissions && g.permissions.length) ? g.permissions.map(p => `
+                                            <span class="text-[10px] px-2 py-0.5 rounded-md border font-medium ${p.slug === 'manage_permissions' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 font-bold' : 'bg-white/5 text-slate-300 border-white/10'}">${h(p.name)}</span>
+                                        `).join('') : '<span class="text-slate-500 italic text-xs">No permissions assigned yet</span>'}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button class="btn btn-primary w-full text-xs font-bold py-2.5" data-cfg-perms="${g.id}">
+                                ${TP.icon('lock', 'w-4 h-4')} Configure Permissions
+                            </button>
+                        </div>`;
+                    }).join('')}
+                </div>
+            </div>`;
+
+            // Open Permissions Config Modal
+            el.querySelectorAll('[data-cfg-perms]').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const group = groups.find(g => g.id == btn.dataset.cfgPerms);
+                    if (!group) return;
+                    const assignedIds = new Set((group.permissions || []).map(p => p.id));
+
+                    // Categorize permissions
+                    const byCat = {};
+                    perms.forEach(p => {
+                        const cat = p.category || 'General Permissions';
+                        if (!byCat[cat]) byCat[cat] = [];
+                        byCat[cat].push(p);
+                    });
+
+                    TP.modal(`
+                        <div class="space-y-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center border border-purple-500/30">
+                                    ${TP.icon('lock', 'w-5 h-5')}
+                                </div>
+                                <div>
+                                    <h3 class="text-base font-bold text-white">${h(group.name)} — Permission Matrix</h3>
+                                    <p class="text-xs text-slate-400">Select the platform permissions and privileges to assign to this group.</p>
+                                </div>
+                            </div>
+
+                            ${!canManage ? `<div class="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs"><b>Notice:</b> Your account does not have permission management privileges. Permissions are displayed in read-only mode.</div>` : ''}
+
+                            <div class="max-h-[50vh] overflow-y-auto scroll-thin space-y-4 p-1">
+                                ${Object.entries(byCat).map(([cat, pList]) => `
+                                    <div class="p-3.5 rounded-xl bg-white/[0.03] border border-white/5 space-y-2.5">
+                                        <div class="text-xs font-bold uppercase tracking-wider text-purple-300 border-b border-white/10 pb-1.5 flex justify-between">
+                                            <span>${h(cat)}</span>
+                                            <span class="text-[10px] text-slate-500 font-mono">${pList.length} permissions</span>
+                                        </div>
+                                        <div class="grid grid-cols-1 gap-2">
+                                            ${pList.map(p => {
+                                                const isChecked = assignedIds.has(p.id);
+                                                const isManage = p.slug === 'manage_permissions';
+                                                return `
+                                                <label class="flex items-start gap-3 p-2.5 rounded-xl border cursor-pointer transition ${isChecked ? (isManage ? 'bg-cyan-500/20 border-cyan-500/50 text-white' : 'bg-purple-500/15 border-purple-500/40 text-white') : 'bg-white/[0.02] border-white/10 text-slate-300 hover:border-white/20'} ${!canManage ? 'opacity-70 pointer-events-none' : ''}">
+                                                    <input type="checkbox" name="perm" value="${p.id}" ${isChecked ? 'checked' : ''} class="mt-1 accent-purple-500">
+                                                    <div class="min-w-0 flex-1">
+                                                        <div class="flex items-center gap-1.5">
+                                                            <span class="text-xs font-bold text-white">${h(p.name)}</span>
+                                                            ${isManage ? '<span class="chip bg-cyan-400 text-black text-[9px] uppercase font-bold">Special Authority</span>' : ''}
+                                                        </div>
+                                                        <p class="text-[11px] text-slate-400 leading-tight mt-0.5">${h(p.description)}</p>
+                                                        <span class="font-mono text-[10px] text-slate-500">slug: ${h(p.slug)}</span>
+                                                    </div>
+                                                </label>`;
+                                            }).join('')}
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+
+                            <div class="flex justify-end gap-2 pt-3 border-t border-white/10">
+                                <button type="button" class="btn btn-ghost" data-close>Close</button>
+                                ${canManage ? `<button type="button" id="btnSavePerms" class="btn btn-primary">Save Permissions</button>` : ''}
+                            </div>
+                        </div>
+                    `, (modalBox) => {
+                        const saveBtn = modalBox.querySelector('#btnSavePerms');
+                        if (saveBtn) {
+                            saveBtn.addEventListener('click', async () => {
+                                const selected = Array.from(modalBox.querySelectorAll('input[name=perm]:checked')).map(cb => Number(cb.value));
+                                await TP.action(() => TP.api(`/admin/user-groups/${group.id}/permissions`, {
+                                    method: 'PATCH',
+                                    body: { permission_ids: selected }
+                                }), 'Permissions updated successfully!');
+                                TP.closeModal();
+                                TP.pages['admin-groups'].render(el);
+                            });
+                        }
+                    });
+                });
+            });
+
+            // New Group Modal
+            el.querySelector('#btnNewGroup').addEventListener('click', () => {
+                TP.modal(`
+                    <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">${TP.icon('lock', 'w-5 h-5 text-purple-400')} Create User Group</h3>
+                    <form id="newGroupForm" class="space-y-3">
+                        <div><label class="label">Group Name *</label><input class="input" name="name" required placeholder="e.g. Lead Risk Analysts"></div>
+                        <div><label class="label">Department</label><select class="input" name="department_id"><option value="">— Unassigned —</option>${depts.map(d => `<option value="${d.id}">${h(d.name)}</option>`).join('')}</select></div>
+                        <div><label class="label">Description</label><textarea class="input" name="description" rows="3" placeholder="Group roles, responsibilities and scope..."></textarea></div>
+                        <div class="flex justify-end gap-2 pt-3">
+                            <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+                            <button type="submit" class="btn btn-primary">Create Group</button>
+                        </div>
+                    </form>
+                `, (box) => {
+                    box.querySelector('#newGroupForm').addEventListener('submit', async (e) => {
+                        e.preventDefault();
+                        const fd = new FormData(e.target);
+                        const body = Object.fromEntries(fd.entries());
+                        if (!body.department_id) delete body.department_id;
+                        await TP.action(() => TP.api('/admin/user-groups', { method: 'POST', body }), 'User group created successfully!');
+                        TP.closeModal();
+                        TP.pages['admin-groups'].render(el);
+                    });
+                });
+            });
+
+            // Delete Group
+            el.querySelectorAll('[data-del-group]').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    if (await TP.confirm('Delete user group?', 'Users assigned to this group will be unassigned.', 'Yes, Delete', true)) {
+                        await TP.action(() => TP.api(`/admin/user-groups/${btn.dataset.delGroup}`, { method: 'DELETE' }), 'Group deleted.');
+                        TP.pages['admin-groups'].render(el);
+                    }
+                });
+            });
+        },
+    };
+
+    // ------------------------------------------------------------------
+    // Departments
+    // ------------------------------------------------------------------
+    TP.pages['admin-departments'] = {
+        title: 'Departments',
+        admin: true,
+        async render(el) {
+            const { data: depts } = await TP.api('/admin/departments');
+
+            el.innerHTML = `
+            <div class="space-y-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-base font-bold text-white">Organizational Departments & Units</h2>
+                        <p class="text-xs text-slate-400">Organize users, teams, and administrative roles by corporate departments.</p>
+                    </div>
+                    <button id="btnNewDept" class="btn btn-primary btn-sm flex items-center gap-1.5">${TP.icon('plus', 'w-4 h-4')} Create Department</button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                    ${depts.map((d) => `
+                        <div class="glass rounded-2xl p-5 flex flex-col justify-between space-y-4 border border-white/10 hover:border-emerald-500/30 transition">
+                            <div class="space-y-3">
+                                <div class="flex items-start justify-between">
+                                    <div>
+                                        <span class="chip bg-emerald-500/20 text-emerald-300 border-emerald-500/30 font-mono text-[10px] font-bold uppercase">${h(d.code)}</span>
+                                        <h3 class="text-base font-bold text-white mt-1">${h(d.name)}</h3>
+                                    </div>
+                                    <div class="flex gap-1">
+                                        <button class="text-slate-400 hover:text-white p-1" data-edit-dept="${d.id}">${TP.icon('sliders', 'w-4 h-4')}</button>
+                                        <button class="text-slate-500 hover:text-red-400 p-1" data-del-dept="${d.id}">${TP.icon('x', 'w-4 h-4')}</button>
+                                    </div>
+                                </div>
+                                <div class="text-xs text-slate-300">Department Head: <b class="text-white">${h(d.manager_name || 'Not assigned')}</b></div>
+                                <p class="text-xs text-slate-400">${h(d.description || 'No description provided.')}</p>
+                            </div>
+                            <div class="flex items-center justify-between pt-2 border-t border-white/5">
+                                <span class="chip ${d.status === 'active' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'} text-xs font-semibold">${d.status === 'active' ? 'Active' : 'Inactive'}</span>
+                                <span class="text-xs font-mono text-slate-500">${d.users_count || 0} staff</span>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>`;
+
+            // Open Create/Edit Dept Modal
+            const openDeptModal = (dept = null) => {
+                TP.modal(`
+                    <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">${TP.icon('bank', 'w-5 h-5 text-emerald-400')} ${dept ? 'Edit Department' : 'Create Department'}</h3>
+                    <form id="deptModalForm" class="space-y-3">
+                        <div><label class="label">Department Name *</label><input class="input" name="name" required value="${h(dept?.name || '')}" placeholder="Risk & Fraud Surveillance"></div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div><label class="label">Code *</label><input class="input font-mono uppercase" name="code" required value="${h(dept?.code || '')}" placeholder="RISK"></div>
+                            <div><label class="label">Department Head</label><input class="input" name="manager_name" value="${h(dept?.manager_name || '')}" placeholder="Orkhan Huseynov"></div>
+                        </div>
+                        <div><label class="label">Description</label><textarea class="input" name="description" rows="3" placeholder="Operational responsibilities...">${h(dept?.description || '')}</textarea></div>
+                        <div><label class="label">Status</label><select class="input" name="status"><option value="active" ${dept?.status !== 'inactive' ? 'selected' : ''}>Active</option><option value="inactive" ${dept?.status === 'inactive' ? 'selected' : ''}>Inactive</option></select></div>
+                        <div class="flex justify-end gap-2 pt-3">
+                            <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+                            <button type="submit" class="btn btn-primary">${dept ? 'Save Changes' : 'Create Department'}</button>
+                        </div>
+                    </form>
+                `, (box) => {
+                    box.querySelector('#deptModalForm').addEventListener('submit', async (e) => {
+                        e.preventDefault();
+                        const fd = new FormData(e.target);
+                        const body = Object.fromEntries(fd.entries());
+                        if (dept) {
+                            await TP.action(() => TP.api(`/admin/departments/${dept.id}`, { method: 'PUT', body }), 'Department updated!');
+                        } else {
+                            await TP.action(() => TP.api('/admin/departments', { method: 'POST', body }), 'Department created!');
+                        }
+                        TP.closeModal();
+                        TP.pages['admin-departments'].render(el);
+                    });
+                });
+            };
+
+            el.querySelector('#btnNewDept').addEventListener('click', () => openDeptModal());
+            el.querySelectorAll('[data-edit-dept]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const dept = depts.find(d => d.id == btn.dataset.editDept);
+                    if (dept) openDeptModal(dept);
+                });
+            });
+            el.querySelectorAll('[data-del-dept]').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    if (await TP.confirm('Delete department?', 'Users in this department will remain without department assignment.', 'Yes, Delete', true)) {
+                        await TP.action(() => TP.api(`/admin/departments/${btn.dataset.delDept}`, { method: 'DELETE' }), 'Department deleted.');
+                        TP.pages['admin-departments'].render(el);
+                    }
+                });
+            });
         },
     };
 
@@ -172,9 +530,12 @@
             const state = { page: 1, status: 'new', severity: '' };
             el.innerHTML = `
             <div class="space-y-4">
-                <div class="flex flex-wrap gap-2">
-                    ${[['new', 'New'], ['investigating', 'Investigating'], ['resolved', 'Resolved'], ['dismissed', 'Dismissed'], ['', 'All']].map(([s, l]) => `<button class="tab ${s === state.status ? 'active' : ''}" data-st="${s}">${l}</button>`).join('')}
-                    <select class="input w-auto ml-auto text-xs" id="sev"><option value="">All severities</option>${options(['low', 'medium', 'high', 'critical'])}</select>
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex flex-wrap gap-2">
+                        ${[['new', 'New'], ['investigating', 'Investigating'], ['resolved', 'Resolved'], ['dismissed', 'Dismissed'], ['', 'All']].map(([s, l]) => `<button class="tab ${s === state.status ? 'active' : ''}" data-st="${s}">${l}</button>`).join('')}
+                        <select class="input w-auto text-xs" id="sev"><option value="">All severities</option>${options(['low', 'medium', 'high', 'critical'])}</select>
+                    </div>
+                    <button id="btnNewAlert" class="btn btn-primary btn-sm shrink-0 flex items-center gap-1.5">${TP.icon('plus', 'w-4 h-4')} Create Incident Alert</button>
                 </div>
                 <div id="al" class="space-y-3"></div>
             </div>`;
@@ -201,6 +562,35 @@
                     if (await TP.action(() => TP.api(`/admin/fraud-alerts/${s.dataset.alert}/status`, { method: 'PATCH', body: { status: s.value } }))) { load(); TP.refreshBadges(); }
                 }));
             };
+
+            el.querySelector('#btnNewAlert').addEventListener('click', () => {
+                TP.modal(`
+                    <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">${TP.icon('alert', 'w-5 h-5 text-red-400')} Create Fraud Incident / Alert</h3>
+                    <form id="newAlertForm" class="space-y-3">
+                        <div><label class="label">Incident Title *</label><input class="input" name="title" required placeholder="Suspicious International IP and Rapid Payments"></div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div><label class="label">Severity Level</label><select class="input" name="severity">${options(['low', 'medium', 'high', 'critical'])}</select></div>
+                            <div><label class="label">Risk Score (0-100)</label><input class="input font-mono" type="number" name="risk_score" min="0" max="100" value="85" required></div>
+                        </div>
+                        <div><label class="label">Description</label><textarea class="input" name="description" rows="2" placeholder="Incident details and investigation findings..."></textarea></div>
+                        <div class="flex justify-end gap-2 pt-3">
+                            <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+                            <button type="submit" class="btn btn-primary">Create Incident</button>
+                        </div>
+                    </form>
+                `, (box) => {
+                    box.querySelector('#newAlertForm').addEventListener('submit', async (e) => {
+                        e.preventDefault();
+                        const fd = new FormData(e.target);
+                        const body = Object.fromEntries(fd.entries());
+                        body.risk_score = Number(body.risk_score);
+                        await TP.action(() => TP.api('/admin/fraud-alerts', { method: 'POST', body }), 'Fraud alert created!');
+                        TP.closeModal();
+                        load();
+                    });
+                });
+            });
+
             el.querySelectorAll('[data-st]').forEach((b) => b.addEventListener('click', () => {
                 state.status = b.dataset.st; state.page = 1;
                 el.querySelectorAll('[data-st]').forEach((x) => x.classList.toggle('active', x === b));
@@ -221,7 +611,10 @@
             const { data: rules } = await TP.api('/admin/fraud-rules');
             el.innerHTML = `
             <div class="space-y-4">
-                <p class="text-sm text-slate-400">Each outgoing payment is scored 0–100 by summing the weights of triggered rules. The most severe action wins; scores ≥ 80 are always held. Test changes safely in the <a href="#/admin-sandbox" class="text-cyan-400 hover:underline">Risk Sandbox</a>.</p>
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <p class="text-sm text-slate-400 max-w-2xl">Each outgoing payment is scored 0–100 by summing the weights of triggered rules. The most severe action wins; scores ≥ 80 are always held. Test changes safely in the <a href="#/admin-sandbox" class="text-cyan-400 hover:underline">Risk Sandbox</a>.</p>
+                    <button id="btnNewRule" class="btn btn-primary btn-sm shrink-0 flex items-center gap-1.5">${TP.icon('plus', 'w-4 h-4')} Yeni Fraud Qaydası / Riski</button>
+                </div>
                 ${rules.map((r) => `
                 <form class="glass rounded-2xl p-5 grid grid-cols-1 lg:grid-cols-12 gap-4 items-end" data-rule="${r.id}">
                     <div class="lg:col-span-5">
@@ -238,6 +631,44 @@
                     </div>
                 </form>`).join('')}
             </div>`;
+
+            el.querySelector('#btnNewRule').addEventListener('click', () => {
+                TP.modal(`
+                    <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">${TP.icon('sliders', 'w-5 h-5 text-cyan-400')} Add Fraud Risk Rule</h3>
+                    <form id="newRuleForm" class="space-y-3">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div><label class="label">Rule Code *</label><input class="input font-mono uppercase" name="rule_code" required placeholder="VELOCITY_EXTREME"></div>
+                            <div><label class="label">Rule Name *</label><input class="input" name="rule_name" required placeholder="High Velocity Transactions"></div>
+                        </div>
+                        <div><label class="label">Description</label><textarea class="input" name="description" rows="2" placeholder="Rule conditions and risk intent..."></textarea></div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div><label class="label">Rule Type</label><select class="input" name="rule_type">${options(['velocity', 'threshold', 'pattern', 'country', 'ip_blacklist'])}</select></div>
+                            <div><label class="label">Condition Operator</label><select class="input" name="condition_operator">${options(['>', '>=', '<', '<=', '==', 'in', 'contains'])}</select></div>
+                            <div><label class="label">Threshold Value</label><input class="input font-mono" name="threshold_value" required value="5000"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div><label class="label">Risk Weight (0-100)</label><input class="input font-mono" type="number" name="risk_weight" min="0" max="100" value="40" required></div>
+                            <div><label class="label">Action Modifier</label><select class="input" name="action">${options([['flag', 'Flag Transaction'], ['step_up_2fa', 'Step-up 2FA Challenge'], ['hold', 'Hold for Review'], ['block', 'Block Immediately']])}</select></div>
+                        </div>
+                        <div class="flex justify-end gap-2 pt-3">
+                            <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+                            <button type="submit" class="btn btn-primary">Add Rule</button>
+                        </div>
+                    </form>
+                `, (box) => {
+                    box.querySelector('#newRuleForm').addEventListener('submit', async (e) => {
+                        e.preventDefault();
+                        const fd = new FormData(e.target);
+                        const body = Object.fromEntries(fd.entries());
+                        body.risk_weight = Number(body.risk_weight);
+                        body.is_active = true;
+                        await TP.action(() => TP.api('/admin/fraud-rules', { method: 'POST', body }), 'Fraud rule added successfully!');
+                        TP.closeModal();
+                        TP.pages['admin-rules'].render(el);
+                    });
+                });
+            });
+
             el.querySelectorAll('[data-rule]').forEach((f) => TP.onSubmit(f, async (data) => {
                 data.risk_weight = Number(data.risk_weight);
                 const res = await TP.api('/admin/fraud-rules/' + f.dataset.rule, { method: 'PUT', body: data });
@@ -408,6 +839,13 @@
             const { data: d } = await TP.api('/admin/ledger', { query: { limit: 60 } });
             el.innerHTML = `
             <div class="space-y-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-base font-bold text-white">Double-Entry General Ledger</h2>
+                        <p class="text-xs text-slate-400">Balance verification and official double-entry ledger journals.</p>
+                    </div>
+                    <button id="btnNewJournal" class="btn btn-primary btn-sm flex items-center gap-1.5">${TP.icon('plus', 'w-4 h-4')} Post Manual Journal Entry</button>
+                </div>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     ${d.trial_balance.map((t) => `
                     <div class="glass rounded-2xl p-5">
@@ -425,6 +863,39 @@
                     ${d.recent_entries.map((e) => `<tr><td class="font-mono text-[11px] text-slate-300">${h(e.transaction?.reference_number)}</td><td class="font-mono text-[11px] text-cyan-300">${h(e.ledger_account?.account_number)}</td><td>${e.entry_type === 'debit' ? chip('DR', 'cyan') : chip('CR', 'purple')}</td><td class="text-right font-mono">${num(e.amount)} ${e.currency_code}</td><td class="text-right font-mono text-slate-400">${num(e.balance_after)}</td><td class="text-xs text-slate-400 max-w-xs truncate">${h(e.description)}</td><td class="text-[11px] text-slate-500">${TP.ago(e.created_at)}</td></tr>`).join('')}
                 </tbody></table></div>`)}
             </div>`;
+
+            el.querySelector('#btnNewJournal').addEventListener('click', () => {
+                TP.modal(`
+                    <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">${TP.icon('book', 'w-5 h-5 text-cyan-400')} Post Manual Journal Entry (Double-Entry)</h3>
+                    <form id="newJournalForm" class="space-y-3">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div><label class="label">Debit Account (DR) *</label><select class="input font-mono" name="debit_account_id" required>${d.accounts.map(a => `<option value="${a.id}">${h(a.account_number)} — ${h(a.account_name)}</option>`).join('')}</select></div>
+                            <div><label class="label">Credit Account (CR) *</label><select class="input font-mono" name="credit_account_id" required>${d.accounts.map(a => `<option value="${a.id}">${h(a.account_number)} — ${h(a.account_name)}</option>`).join('')}</select></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div><label class="label">Currency</label><select class="input" name="currency_code">${options(['AZN', 'EUR', 'USD'])}</select></div>
+                            <div><label class="label">Amount *</label><input class="input font-mono" type="number" step="0.01" name="amount" required value="100.00"></div>
+                        </div>
+                        <div><label class="label">Memo / Description *</label><input class="input" name="description" required placeholder="Reserve balancing or manual adjustment entry"></div>
+                        <div class="flex justify-end gap-2 pt-3">
+                            <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+                            <button type="submit" class="btn btn-primary">Post Journal Entry</button>
+                        </div>
+                    </form>
+                `, (box) => {
+                    box.querySelector('#newJournalForm').addEventListener('submit', async (e) => {
+                        e.preventDefault();
+                        const fd = new FormData(e.target);
+                        const body = Object.fromEntries(fd.entries());
+                        body.amount = Number(body.amount);
+                        body.debit_account_id = Number(body.debit_account_id);
+                        body.credit_account_id = Number(body.credit_account_id);
+                        await TP.action(() => TP.api('/admin/ledger/entries', { method: 'POST', body }), 'Journal entry posted successfully!');
+                        TP.closeModal();
+                        TP.pages['admin-ledger'].render(el);
+                    });
+                });
+            });
         },
     };
 

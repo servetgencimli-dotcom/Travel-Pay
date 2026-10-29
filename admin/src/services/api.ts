@@ -68,9 +68,34 @@ export class ApiClient {
     return this.request('/admin/dashboard');
   }
 
-  public static getUsers(search = '', role = '', status = '', page = 1) {
-    const params = new URLSearchParams({ search, role, status, page: String(page) });
+  public static getUsers(search = '', role = '', status = '', page = 1, departmentId = '', userGroupId = '') {
+    const params = new URLSearchParams({
+      search,
+      role,
+      status,
+      page: String(page),
+      department_id: departmentId ? String(departmentId) : '',
+      user_group_id: userGroupId ? String(userGroupId) : '',
+    });
     return this.request(`/admin/users?${params}`);
+  }
+
+  public static createUser(data: {
+    name: string;
+    email: string;
+    phone: string;
+    password: string;
+    role: 'user' | 'admin';
+    department_id?: number | null;
+    user_group_id?: number | null;
+    initial_azn?: number;
+    initial_eur?: number;
+    initial_usd?: number;
+  }) {
+    return this.request('/admin/users', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   }
 
   public static updateUserStatus(userId: number, status: 'active' | 'suspended' | 'frozen') {
@@ -80,9 +105,90 @@ export class ApiClient {
     });
   }
 
+  // Departments
+  public static getDepartments() {
+    return this.request('/admin/departments');
+  }
+
+  public static createDepartment(data: {
+    name: string;
+    code: string;
+    description?: string;
+    manager_name?: string;
+    status?: 'active' | 'inactive';
+  }) {
+    return this.request('/admin/departments', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  public static updateDepartment(id: number, data: any) {
+    return this.request(`/admin/departments/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  public static deleteDepartment(id: number) {
+    return this.request(`/admin/departments/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // User Groups & Roles
+  public static getUserGroups() {
+    return this.request('/admin/user-groups');
+  }
+
+  public static createUserGroup(data: {
+    name: string;
+    department_id?: number | null;
+    description?: string;
+    permission_ids?: number[];
+  }) {
+    return this.request('/admin/user-groups', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  public static updateUserGroup(id: number, data: any) {
+    return this.request(`/admin/user-groups/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  public static deleteUserGroup(id: number) {
+    return this.request(`/admin/user-groups/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Permissions (Special permission: manage_permissions)
+  public static getPermissions() {
+    return this.request('/admin/permissions');
+  }
+
+  public static updateGroupPermissions(groupId: number, permissionIds: number[]) {
+    return this.request(`/admin/user-groups/${groupId}/permissions`, {
+      method: 'PUT',
+      body: JSON.stringify({ permission_ids: permissionIds }),
+    });
+  }
+
+  // Wallets
   public static getWallets(status = '', page = 1) {
     const params = new URLSearchParams({ status, page: String(page) });
     return this.request(`/admin/wallets?${params}`);
+  }
+
+  public static creditWallet(walletId: number, data: { currency_code: string; amount: number; reason: string }) {
+    return this.request(`/admin/wallets/${walletId}/credit`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   }
 
   public static getTransactions(type = '', status = '', currency = '', page = 1) {
@@ -93,6 +199,20 @@ export class ApiClient {
   public static getFraudAlerts(status = '', severity = '', page = 1) {
     const params = new URLSearchParams({ status, severity, page: String(page) });
     return this.request(`/admin/fraud-alerts?${params}`);
+  }
+
+  public static createFraudAlert(data: {
+    user_id: number;
+    title: string;
+    description: string;
+    severity: 'low' | 'medium' | 'high' | 'critical';
+    risk_score: number;
+    details?: any;
+  }) {
+    return this.request('/admin/fraud-alerts', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   }
 
   public static updateFraudAlertStatus(alertId: number, status: string) {
@@ -106,9 +226,40 @@ export class ApiClient {
     return this.request('/admin/fraud-rules');
   }
 
+  public static createFraudRule(data: {
+    rule_name: string;
+    rule_code: string;
+    description: string;
+    rule_type: string;
+    condition_operator: string;
+    threshold_value: string;
+    risk_weight: number;
+    action: 'flag' | 'step_up_2fa' | 'hold' | 'block';
+    is_active?: boolean;
+  }) {
+    return this.request('/admin/fraud-rules', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
   public static updateFraudRule(ruleId: number, data: any) {
     return this.request(`/admin/fraud-rules/${ruleId}`, {
       method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  public static createLedgerEntry(data: {
+    account_id: number;
+    entry_type: 'debit' | 'credit';
+    amount: number;
+    currency_code: string;
+    description: string;
+    reference?: string;
+  }) {
+    return this.request('/admin/ledger/entries', {
+      method: 'POST',
       body: JSON.stringify(data),
     });
   }
