@@ -98,6 +98,20 @@ export class ApiClient {
     });
   }
 
+  public static updateUser(userId: number, data: {
+    name?: string;
+    phone?: string | null;
+    role?: 'user' | 'merchant' | 'admin';
+    department_id?: number | null;
+    user_group_id?: number | null;
+    status?: 'active' | 'suspended' | 'frozen';
+  }) {
+    return this.request(`/admin/users/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
   public static updateUserStatus(userId: number, status: 'active' | 'suspended' | 'frozen') {
     return this.request(`/admin/users/${userId}/status`, {
       method: 'PATCH',
@@ -108,6 +122,23 @@ export class ApiClient {
   // Departments
   public static getDepartments() {
     return this.request('/admin/departments');
+  }
+
+  public static getDepartmentMembers(id: number) {
+    return this.request(`/admin/departments/${id}/members`);
+  }
+
+  public static assignDepartmentMember(departmentId: number, userId: number) {
+    return this.request(`/admin/departments/${departmentId}/assign-member`, {
+      method: 'POST',
+      body: JSON.stringify({ user_id: userId }),
+    });
+  }
+
+  public static removeDepartmentMember(departmentId: number, userId: number) {
+    return this.request(`/admin/departments/${departmentId}/remove-member/${userId}`, {
+      method: 'POST',
+    });
   }
 
   public static createDepartment(data: {

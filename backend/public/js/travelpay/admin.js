@@ -121,11 +121,110 @@
                         <td class="font-mono text-xs text-cyan-300">${h(u.wallet?.wallet_number || '—')}</td>
                         <td class="text-right font-mono">${num(bal(u, 'AZN'))}</td><td class="text-right font-mono">${num(bal(u, 'EUR'))}</td><td class="text-right font-mono">${num(bal(u, 'USD'))}</td>
                         <td>${statusChip(u.status)}</td>
-                        <td class="text-right">${u.id !== TP.user.id ? `<button class="btn btn-sm ${u.status === 'active' ? 'btn-danger' : 'btn-ghost'}" data-status="${u.status === 'active' ? 'frozen' : 'active'}" data-id="${u.id}">${u.status === 'active' ? 'Freeze' : 'Activate'}</button>` : ''}</td>
+                        <td class="text-right whitespace-nowrap space-x-1">
+                            <button class="btn btn-ghost btn-sm text-cyan-400 hover:text-cyan-300" data-edit-user="${u.id}" title="Edit User & Department Assignment">${TP.icon('sliders', 'w-3.5 h-3.5')} <span class="hidden sm:inline">Edit</span></button>
+                            ${u.id !== TP.user.id ? `<button class="btn btn-sm ${u.status === 'active' ? 'btn-danger' : 'btn-ghost'}" data-status="${u.status === 'active' ? 'frozen' : 'active'}" data-id="${u.id}">${u.status === 'active' ? 'Freeze' : 'Activate'}</button>` : ''}
+                        </td>
                     </tr>`).join('')}</tbody></table>`;
                 box.appendChild(pager(res.meta, (p) => { state.page = p; load(); }));
                 box.querySelectorAll('[data-status]').forEach((b) => b.addEventListener('click', async () => {
                     if (await TP.action(() => TP.api(`/admin/users/${b.dataset.id}/status`, { method: 'PATCH', body: { status: b.dataset.status } }))) load();
+                }));
+                box.querySelectorAll('[data-edit-user]').forEach((b) => b.addEventListener('click', () => {
+                    const user = res.data.find(x => x.id == b.dataset.editUser);
+                    if (!user) return;
+                    TP.modal(`
+                        <h3 class="text-lg font-bold text-white mb-2 flex items-center gap-2">${TP.icon('sliders', 'w-5 h-5 text-cyan-400')} Edit User & Department Assignment</h3>
+                        <p class="text-xs text-slate-400 mb-4">Assign to a department or remove (unassign), set user group permissions and role.</p>
+                        <form id="editUserForm" class="space-y-4">
+                            <div class="p-3 rounded-xl bg-white/5 border border-white/5 flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-xl bg-cyan-500/20 text-cyan-300 flex items-center justify-center font-bold text-base shrink-0">
+                                    ${h(user.name.charAt(0).toUpperCase())}
+                                </div>
+                                <div class="min-w-0 flex-1">
+                                    <div class="font-bold text-white text-sm truncate">${h(user.name)}</div>
+                                    <div class="text-xs text-slate-400 font-mono truncate">${h(user.email)} · ID #${user.id}</div>
+                                </div>
+                                ${statusChip(user.status)}
+                            </div>
+
+                            <div>
+                                <label class="label">Full Name</label>
+                                <input class="input" name="name" value="${h(user.name)}" required>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="label">Department Assignment</label>
+                                    <select class="input" name="department_id">
+                                        <option value="">— None / Unassign from Department —</option>
+                                        ${depts.map(d => `<option value="${d.id}" ${user.department_id == d.id ? 'selected' : ''}>${h(d.name)} (${h(d.code)})</option>`).join('')}
+                                    </select>
+                                    <span class="text-[10px] text-slate-500 mt-1 block">Select "None" to remove user from department.</span>
+                                </div>
+                                <div>
+                                    <label class="label">User Group (Authority)</label>
+                                    <select class="input" name="user_group_id">
+                                        <option value="">— None / Unassign from Group —</option>
+                                        ${groups.map(g => `<option value="${g.id}" ${user.user_group_id == g.id ? 'selected' : ''}>${h(g.name)}</option>`).join('')}
+                                    </select>
+                                    <span class="text-[10px] text-slate-500 mt-1 block">Determines assigned RBAC permissions.</span>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="label">Platform Role</label>
+                                    <select class="input" name="role">
+                                        <option value="user" ${user.role === 'user' ? 'selected' : ''}>Standard User (Customer)</option>
+                                        <option value="merchant" ${user.role === 'merchant' ? 'selected' : ''}>Merchant / Business</option>
+                                        <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Administrator</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="label">Phone Number</label>
+                                    <input class="input font-mono" name="phone" value="${h(user.phone || '')}">
+                                </div>
+                            </div>
+
+                            <div class="flex justify-between items-center pt-3 border-t border-white/10">
+                                ${user.department ? `
+                                    <button type="button" id="btnUnassignDept" class="text-xs text-red-400 hover:text-red-300 flex items-center gap-1">
+                                        ${TP.icon('x', 'w-3.5 h-3.5')} Unassign from ${h(user.department.name)}
+                                    </button>
+                                ` : '<span></span>'}
+                                <div class="flex gap-2">
+                                    <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+                                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                                </div>
+                            </div>
+                        </form>
+                    `, (modalBox) => {
+                        const unassignBtn = modalBox.querySelector('#btnUnassignDept');
+                        if (unassignBtn) {
+                            unassignBtn.addEventListener('click', () => {
+                                const sel = modalBox.querySelector('select[name=department_id]');
+                                if (sel) sel.value = '';
+                                modalBox.querySelector('#editUserForm').requestSubmit();
+                            });
+                        }
+
+                        modalBox.querySelector('#editUserForm').addEventListener('submit', async (e) => {
+                            e.preventDefault();
+                            const fd = new FormData(e.target);
+                            const body = {
+                                name: fd.get('name'),
+                                phone: fd.get('phone') || null,
+                                role: fd.get('role'),
+                                department_id: fd.get('department_id') ? Number(fd.get('department_id')) : null,
+                                user_group_id: fd.get('user_group_id') ? Number(fd.get('user_group_id')) : null,
+                            };
+
+                            await TP.action(() => TP.api(`/admin/users/${user.id}`, { method: 'PUT', body }), 'User & department assignment updated successfully!');
+                            TP.closeModal();
+                            load();
+                        });
+                    });
                 }));
             };
 
@@ -412,12 +511,112 @@
                             </div>
                             <div class="flex items-center justify-between pt-2 border-t border-white/5">
                                 <span class="chip ${d.status === 'active' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'} text-xs font-semibold">${d.status === 'active' ? 'Active' : 'Inactive'}</span>
-                                <span class="text-xs font-mono text-slate-500">${d.users_count || 0} staff</span>
+                                <button class="btn btn-ghost btn-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1.5" data-members-dept="${d.id}" title="Manage department staff members">
+                                    ${TP.icon('users', 'w-3.5 h-3.5')}
+                                    <span>${d.users_count || 0} staff · Manage</span>
+                                </button>
                             </div>
                         </div>
                     `).join('')}
                 </div>
             </div>`;
+
+            // Open Manage Staff Modal
+            const openStaffModal = async (deptId) => {
+                const res = await TP.api(`/admin/departments/${deptId}/members`);
+                const dept = res.data.department;
+                const members = res.data.members || [];
+                const candidates = res.data.candidates || [];
+
+                TP.modal(`
+                    <div class="space-y-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30">
+                                ${TP.icon('users', 'w-5 h-5')}
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                                    <span>${h(dept.name)}</span>
+                                    <span class="chip bg-emerald-500/20 text-emerald-300 border-emerald-500/30 font-mono text-[10px]">${h(dept.code)}</span>
+                                </h3>
+                                <p class="text-xs text-slate-400">Manage assigned users: assign new staff or remove existing members from this department.</p>
+                            </div>
+                        </div>
+
+                        <!-- Assign user form -->
+                        <div class="p-3.5 rounded-xl bg-white/[0.03] border border-white/10 space-y-2">
+                            <label class="text-xs font-bold uppercase tracking-wider text-emerald-400 block">Assign User to Department</label>
+                            <div class="flex gap-2">
+                                <select id="staffCandidateSelect" class="input flex-1 text-xs">
+                                    <option value="">— Select an existing user to assign —</option>
+                                    ${candidates.map(c => `<option value="${c.id}">${h(c.name)} (${h(c.email)}) — ${c.department ? 'Current: ' + h(c.department.name) : 'No Dept'}</option>`).join('')}
+                                </select>
+                                <button id="btnAssignStaff" class="btn btn-primary btn-sm shrink-0 flex items-center gap-1.5">
+                                    ${TP.icon('plus', 'w-3.5 h-3.5')} Assign
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Current members table -->
+                        <div>
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-xs font-bold uppercase tracking-wider text-slate-300">Current Department Staff (${members.length})</span>
+                            </div>
+                            <div class="max-h-72 overflow-y-auto custom-scrollbar rounded-xl border border-white/5 divide-y divide-white/5 bg-black/20">
+                                ${members.length ? members.map(m => `
+                                    <div class="p-3 flex items-center justify-between gap-3 hover:bg-white/[0.02] transition">
+                                        <div class="min-w-0 flex-1">
+                                            <div class="font-bold text-white text-xs truncate">${h(m.name)}</div>
+                                            <div class="text-[11px] text-slate-400 font-mono truncate">${h(m.email)}</div>
+                                            ${m.user_group ? `<span class="chip bg-purple-500/10 text-purple-300 border-purple-500/20 text-[9px] mt-1 inline-block">${h(m.user_group.name)}</span>` : ''}
+                                        </div>
+                                        <div class="flex items-center gap-2 shrink-0">
+                                            ${statusChip(m.status)}
+                                            <button class="btn btn-danger btn-xs" data-remove-staff="${m.id}" title="Remove user from this department">
+                                                ${TP.icon('x', 'w-3 h-3')} Remove
+                                            </button>
+                                        </div>
+                                    </div>
+                                `).join('') : '<div class="p-6 text-center text-xs text-slate-500 italic">No users currently assigned to this department.</div>'}
+                            </div>
+                        </div>
+
+                        <div class="flex justify-end pt-2 border-t border-white/10">
+                            <button type="button" class="btn btn-ghost" data-close>Close</button>
+                        </div>
+                    </div>
+                `, (box) => {
+                    box.querySelector('#btnAssignStaff')?.addEventListener('click', async () => {
+                        const sel = box.querySelector('#staffCandidateSelect');
+                        const userId = sel?.value;
+                        if (!userId) {
+                            TP.toast('Please select a user to assign.', 'error');
+                            return;
+                        }
+                        await TP.action(() => TP.api(`/admin/departments/${dept.id}/assign-member`, {
+                            method: 'POST',
+                            body: { user_id: Number(userId) },
+                        }), 'User assigned to department!');
+                        TP.closeModal();
+                        TP.pages['admin-departments'].render(el);
+                        openStaffModal(dept.id);
+                    });
+
+                    box.querySelectorAll('[data-remove-staff]').forEach(btn => {
+                        btn.addEventListener('click', async () => {
+                            const uId = btn.dataset.removeStaff;
+                            if (await TP.confirm('Remove from department?', 'The user will be unassigned from this department.', 'Yes, Remove', true)) {
+                                await TP.action(() => TP.api(`/admin/departments/${dept.id}/remove-member/${uId}`, {
+                                    method: 'POST',
+                                }), 'User removed from department.');
+                                TP.closeModal();
+                                TP.pages['admin-departments'].render(el);
+                                openStaffModal(dept.id);
+                            }
+                        });
+                    });
+                });
+            };
 
             // Open Create/Edit Dept Modal
             const openDeptModal = (dept = null) => {
@@ -457,6 +656,11 @@
                 btn.addEventListener('click', () => {
                     const dept = depts.find(d => d.id == btn.dataset.editDept);
                     if (dept) openDeptModal(dept);
+                });
+            });
+            el.querySelectorAll('[data-members-dept]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    openStaffModal(btn.dataset.membersDept);
                 });
             });
             el.querySelectorAll('[data-del-dept]').forEach(btn => {
@@ -613,7 +817,7 @@
             <div class="space-y-4">
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <p class="text-sm text-slate-400 max-w-2xl">Each outgoing payment is scored 0–100 by summing the weights of triggered rules. The most severe action wins; scores ≥ 80 are always held. Test changes safely in the <a href="#/admin-sandbox" class="text-cyan-400 hover:underline">Risk Sandbox</a>.</p>
-                    <button id="btnNewRule" class="btn btn-primary btn-sm shrink-0 flex items-center gap-1.5">${TP.icon('plus', 'w-4 h-4')} Yeni Fraud Qaydası / Riski</button>
+                    <button id="btnNewRule" class="btn btn-primary btn-sm shrink-0 flex items-center gap-1.5">${TP.icon('plus', 'w-4 h-4')} Add Fraud Risk Rule</button>
                 </div>
                 ${rules.map((r) => `
                 <form class="glass rounded-2xl p-5 grid grid-cols-1 lg:grid-cols-12 gap-4 items-end" data-rule="${r.id}">

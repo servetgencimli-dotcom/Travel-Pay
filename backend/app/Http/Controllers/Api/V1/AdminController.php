@@ -565,6 +565,81 @@ class AdminController extends Controller
         ], 201);
     }
 
+    public function updateUser(Request $request, int $id): JsonResponse
+    {
+        $user = User::findOrFail($id);
+
+        $data = $request->validate([
+            'name' => ['sometimes', 'string', 'max:255'],
+            'email' => ['sometimes', 'string', 'email', 'max:255', 'unique:users,email,' . $user->id],
+            'phone' => ['nullable', 'string', 'max:50'],
+            'role' => ['sometimes', 'string', 'in:user,admin,merchant'],
+            'department_id' => ['nullable'],
+            'user_group_id' => ['nullable'],
+            'status' => ['sometimes', 'string', 'in:active,suspended,frozen'],
+        ]);
+
+        $deptId = null;
+        if (!empty($data['department_id'])) {
+            $dept = Department::find($data['department_id']);
+            if (!$dept) {
+                return response()->json(['status' => 'error', 'message' => 'Seçilmiş departament tapılmadı.'], 422);
+            }
+            $deptId = $dept->id;
+        }
+
+        $groupId = null;
+        if (!empty($data['user_group_id'])) {
+            $group = UserGroup::find($data['user_group_id']);
+            if (!$group) {
+                return response()->json(['status' => 'error', 'message' => 'Seçilmiş istifadəçi qrupu tapılmadı.'], 422);
+            }
+            $groupId = $group->id;
+        }
+
+        $oldValues = [
+            'department_id' => $user->department_id,
+            'user_group_id' => $user->user_group_id,
+            'role' => $user->role,
+            'status' => $user->status,
+            'name' => $user->name,
+        ];
+
+        $updatePayload = [];
+        if (array_key_exists('name', $data)) $updatePayload['name'] = $data['name'];
+        if (array_key_exists('email', $data)) $updatePayload['email'] = $data['email'];
+        if (array_key_exists('phone', $data)) $updatePayload['phone'] = $data['phone'];
+        if (array_key_exists('role', $data)) $updatePayload['role'] = $data['role'];
+        if (array_key_exists('status', $data)) $updatePayload['status'] = $data['status'];
+        if (array_key_exists('department_id', $data)) $updatePayload['department_id'] = $deptId;
+        if (array_key_exists('user_group_id', $data)) $updatePayload['user_group_id'] = $groupId;
+
+        $user->update($updatePayload);
+
+        if (!$user->isActive()) {
+            $user->tokens()->delete();
+        }
+
+        $user->load(['wallet.balances', 'department', 'userGroup.permissions']);
+
+        $this->auditLogService->log(
+            $request->user(),
+            'admin.user_updated',
+            User::class,
+            $user->id,
+            $oldValues,
+            $updatePayload,
+            $request->ip(),
+            $request->userAgent()
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "İstifadəçi ({$user->name}) məlumatları və departament/qrup təyinatı uğurla yeniləndi.",
+            'data' => new UserResource($user),
+        ]);
+    }
+
     public function departments(): JsonResponse
     {
         $departments = Department::withCount(['users', 'userGroups'])
@@ -668,6 +743,87 @@ class AdminController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Departament uğurla silindi.',
+        ]);
+    }
+
+    public function departmentMembers(int $id): JsonResponse
+    {
+        $dept = Department::findOrFail($id);
+        $members = User::where('department_id', $dept->id)
+            ->with(['userGroup:id,name,slug'])
+            ->orderBy('name')
+            ->get(['id', 'name', 'email', 'role', 'status', 'department_id', 'user_group_id', 'created_at']);
+
+        $candidates = User::where(function ($q) use ($dept) {
+                $q->whereNull('department_id')
+                  ->orWhere('department_id', '!=', $dept->id);
+            })
+            ->with(['department:id,name,code', 'userGroup:id,name'])
+            ->orderBy('name')
+            ->take(100)
+            ->get(['id', 'name', 'email', 'role', 'department_id', 'user_group_id']);
+
+        return response()->json([
+            'status' => 'success',
+            'data' => [
+                'department' => $dept,
+                'members' => $members,
+                'candidates' => $candidates,
+            ],
+        ]);
+    }
+
+    public function assignDepartmentMember(Request $request, int $id): JsonResponse
+    {
+        $dept = Department::findOrFail($id);
+        $data = $request->validate([
+            'user_id' => ['required', 'exists:users,id'],
+        ]);
+
+        $user = User::findOrFail($data['user_id']);
+        $oldDeptId = $user->department_id;
+        $user->update(['department_id' => $dept->id]);
+
+        $this->auditLogService->log(
+            $request->user(),
+            'admin.department_member_assigned',
+            User::class,
+            $user->id,
+            ['department_id' => $oldDeptId],
+            ['department_id' => $dept->id],
+            $request->ip(),
+            $request->userAgent()
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "{$user->name} uğurla {$dept->name} departamentinə təyin edildi.",
+            'data' => new UserResource($user->fresh(['wallet.balances', 'department', 'userGroup.permissions'])),
+        ]);
+    }
+
+    public function removeDepartmentMember(Request $request, int $id, int $userId): JsonResponse
+    {
+        $dept = Department::findOrFail($id);
+        $user = User::where('id', $userId)->where('department_id', $dept->id)->firstOrFail();
+
+        $user->update(['department_id' => null]);
+
+        $this->auditLogService->log(
+            $request->user(),
+            'admin.department_member_removed',
+            User::class,
+            $user->id,
+            ['department_id' => $dept->id],
+            ['department_id' => null],
+            $request->ip(),
+            $request->userAgent()
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "{$user->name} {$dept->name} departamentindən çıxarıldı (təyinat ləğv edildi).",
+            'data' => new UserResource($user->fresh(['wallet.balances', 'department', 'userGroup.permissions'])),
         ]);
     }
 

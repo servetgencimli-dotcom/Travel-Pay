@@ -60,6 +60,17 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser, initialTab = 
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
 
+  // User Edit Modal state
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [editUserForm, setEditUserForm] = useState({
+    name: '',
+    phone: '',
+    role: 'user' as 'user' | 'merchant' | 'admin',
+    department_id: '',
+    user_group_id: '',
+  });
+  const [savingUserEdit, setSavingUserEdit] = useState(false);
+
   // --- Modals ---
   const [showCreateUserModal, setShowCreateUserModal] = useState(false);
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
@@ -222,6 +233,30 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser, initialTab = 
       alert(err.message || 'İstifadəçi yaradılarkən xəta baş verdi.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // --- Handlers: Edit User & Department Assignment ---
+  const handleEditUserSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    try {
+      setSavingUserEdit(true);
+      await ApiClient.updateUser(editingUser.id, {
+        name: editUserForm.name,
+        phone: editUserForm.phone || null,
+        role: editUserForm.role,
+        department_id: editUserForm.department_id ? Number(editUserForm.department_id) : null,
+        user_group_id: editUserForm.user_group_id ? Number(editUserForm.user_group_id) : null,
+      });
+      setEditingUser(null);
+      loadUsers();
+      loadReferenceData();
+      alert('İstifadəçi və departament təyinatı uğurla yeniləndi!');
+    } catch (err: any) {
+      alert(err.message || 'Xəta baş verdi.');
+    } finally {
+      setSavingUserEdit(false);
     }
   };
 
@@ -665,11 +700,28 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser, initialTab = 
                             </span>
                           </td>
 
-                          <td className="py-3.5 px-5 text-right space-x-1">
+                          <td className="py-3.5 px-5 text-right space-x-1 whitespace-nowrap">
+                            <button
+                              onClick={() => {
+                                setEditingUser(user);
+                                setEditUserForm({
+                                  name: user.name,
+                                  phone: user.phone || '',
+                                  role: user.role as any,
+                                  department_id: user.department_id ? String(user.department_id) : '',
+                                  user_group_id: user.user_group_id ? String(user.user_group_id) : '',
+                                });
+                              }}
+                              title="İstifadəçi və Departament Təyinatını Redaktə Et"
+                              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-cyan-400 transition cursor-pointer"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+
                             <button
                               onClick={() => setSelectedUser(user)}
                               title="Təfərrüatlara bax"
-                              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-cyan-400 transition cursor-pointer"
+                              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 transition cursor-pointer"
                             >
                               <Eye className="w-3.5 h-3.5" />
                             </button>
@@ -1751,6 +1803,147 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser, initialTab = 
                 )}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MODAL 6: EDIT USER & DEPARTMENT ASSIGNMENT                     */}
+      {/* ============================================================== */}
+      {editingUser && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="glass-card w-full max-w-lg rounded-2xl border border-white/15 p-6 shadow-2xl relative">
+            <button
+              onClick={() => setEditingUser(null)}
+              className="absolute top-5 right-5 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center border border-cyan-500/30">
+                <Edit3 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">İstifadəçi və Departament Təyinatını Redaktə Et</h3>
+                <p className="text-xs text-slate-400 font-mono">{editingUser.email}</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleEditUserSubmit} className="space-y-4">
+              <div>
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-300 block mb-1">
+                  Ad və Soyad *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editUserForm.name}
+                  onChange={(e) => setEditUserForm({ ...editUserForm, name: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-300 block mb-1">
+                    Departament Təyinatı
+                  </label>
+                  <select
+                    value={editUserForm.department_id}
+                    onChange={(e) => setEditUserForm({ ...editUserForm, department_id: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-[#0b1329] border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400"
+                  >
+                    <option value="">— Heç biri / Departamentdən çıxar —</option>
+                    {departments.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name} ({d.code})
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-[10px] text-slate-500 mt-1 block">Çıxarmaq üçün "Heç biri" seçin.</span>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-300 block mb-1">
+                    İstifadəçi Qrupu
+                  </label>
+                  <select
+                    value={editUserForm.user_group_id}
+                    onChange={(e) => setEditUserForm({ ...editUserForm, user_group_id: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-[#0b1329] border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400"
+                  >
+                    <option value="">— Heç biri / Qrupdan çıxar —</option>
+                    {userGroups.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-300 block mb-1">
+                    Rol
+                  </label>
+                  <select
+                    value={editUserForm.role}
+                    onChange={(e) => setEditUserForm({ ...editUserForm, role: e.target.value as any })}
+                    className="w-full px-3 py-2 rounded-xl bg-[#0b1329] border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400"
+                  >
+                    <option value="user">İstifadəçi (User)</option>
+                    <option value="merchant">Tərəfdaş (Merchant)</option>
+                    <option value="admin">Administrator</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-300 block mb-1">
+                    Telefon
+                  </label>
+                  <input
+                    type="text"
+                    value={editUserForm.phone}
+                    onChange={(e) => setEditUserForm({ ...editUserForm, phone: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center pt-3 border-t border-white/10">
+                {editingUser.department ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditUserForm({ ...editUserForm, department_id: '' });
+                    }}
+                    className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1 cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Departamentdən çıxar</span>
+                  </button>
+                ) : <span />}
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingUser(null)}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white transition cursor-pointer"
+                  >
+                    Ləğv Et
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingUserEdit}
+                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-xs font-bold transition shadow-lg shadow-cyan-500/20 cursor-pointer disabled:opacity-50"
+                  >
+                    {savingUserEdit ? 'Yadda Saxlanılır...' : 'Yadda Saxla'}
+                  </button>
+                </div>
+              </div>
+            </form>
           </div>
         </div>
       )}

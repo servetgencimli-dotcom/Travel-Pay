@@ -137,6 +137,8 @@ Route::prefix('v1')->group(function () {
             Route::get('dashboard', [AdminController::class, 'dashboard'])->name('api.v1.admin.dashboard');
             Route::get('users', [AdminController::class, 'users'])->name('api.v1.admin.users');
             Route::post('users', [AdminController::class, 'createUser'])->name('api.v1.admin.users.create');
+            Route::put('users/{id}', [AdminController::class, 'updateUser'])->name('api.v1.admin.users.update');
+            Route::patch('users/{id}', [AdminController::class, 'updateUser'])->name('api.v1.admin.users.patch');
             Route::patch('users/{id}/status', [AdminController::class, 'updateUserStatus'])->name('api.v1.admin.users.status');
 
             // Departments & Organization Structure
@@ -144,6 +146,10 @@ Route::prefix('v1')->group(function () {
             Route::post('departments', [AdminController::class, 'createDepartment'])->name('api.v1.admin.departments.create');
             Route::put('departments/{id}', [AdminController::class, 'updateDepartment'])->name('api.v1.admin.departments.update');
             Route::delete('departments/{id}', [AdminController::class, 'deleteDepartment'])->name('api.v1.admin.departments.delete');
+            Route::get('departments/{id}/members', [AdminController::class, 'departmentMembers'])->name('api.v1.admin.departments.members');
+            Route::post('departments/{id}/assign-member', [AdminController::class, 'assignDepartmentMember'])->name('api.v1.admin.departments.members.assign');
+            Route::delete('departments/{id}/members/{userId}', [AdminController::class, 'removeDepartmentMember'])->name('api.v1.admin.departments.members.remove');
+            Route::post('departments/{id}/remove-member/{userId}', [AdminController::class, 'removeDepartmentMember'])->name('api.v1.admin.departments.members.remove.post');
 
             // User Groups & Roles
             Route::get('user-groups', [AdminController::class, 'userGroups'])->name('api.v1.admin.user-groups');
